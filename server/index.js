@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 10000;
 
 // Middleware
 app.use(helmet({
-  contentSecurityPolicy: false, // Disable for development
+  contentSecurityPolicy: false
 }));
 app.use(cors());
 app.use(express.json());
@@ -20,7 +20,6 @@ app.use(express.json());
 if (process.env.NODE_ENV === 'production') {
   const buildPath = path.join(__dirname, '../client/build');
   
-  // Check if build directory exists
   if (fs.existsSync(buildPath)) {
     app.use(express.static(buildPath));
     console.log('✅ Serving React build from:', buildPath);
@@ -29,7 +28,7 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
-// System prompt for AI-driven pallet building
+// System prompt
 const systemPrompt = `
 You are a pallet building expert working in a large Walmart-style distribution center.
 
@@ -56,69 +55,30 @@ Return a list of pallets with:
 - Special Instructions
 `;
 
-// [Include all the PalletBuilder class code from before - same as previous upload]
-
-// Routes
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    buildExists: fs.existsSync(path.join(__dirname, '../client/build'))
-  });
-});
-
-// [Include all other routes - same as before]
-
-// Serve React app for any non-API routes in production
-if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    const indexPath = path.join(__dirname, '../client/build/index.html');
-    
-    if (fs.existsSync(indexPath)) {
-      res.sendFile(indexPath);
-    } else {
-      // Fallback if build doesn't exist
-      res.json({
-        message: 'Pallet Builder API is running',
-        api: {
-          health: '/api/health',
-          buildPallets: '/api/build-pallets',
-          systemPrompt: '/api/system-prompt'
-        },
-        note: 'Frontend build not found. Use API endpoints directly.'
-      });
-    }
-  });
-}
-
-// [Rest of the code same as before]
-- List of SKUs and quantities (cases or eaches)
-- Total Weight
-- Special Instructions
-`;
-
-// Pallet building algorithm
+// Pallet building algorithm - ES5 compatible
 class PalletBuilder {
   constructor() {
-    this.MAX_WEIGHT = 1000; // kg
-    this.MAX_HEIGHT = 7; // layers
+    this.MAX_WEIGHT = 1000;
+    this.MAX_HEIGHT = 7;
   }
 
   buildPallets(orderLines) {
     const pallets = [];
     const storeGroups = this.groupByStore(orderLines);
+    const stores = Object.keys(storeGroups);
 
-    for (const [store, items] of Object.entries(storeGroups)) {
+    for (let i = 0; i < stores.length; i++) {
+      const store = stores[i];
+      const items = storeGroups[store];
       const storePallets = this.buildStorePallets(store, items);
-      pallets.push(...storePallets);
+      pallets.push.apply(pallets, storePallets);
     }
 
     return pallets;
   }
 
   groupByStore(orderLines) {
-    return orderLines.reduce((groups, item) => {
+    return orderLines.reduce(function(groups, item) {
       if (!groups[item.store]) {
         groups[item.store] = [];
       }
@@ -129,19 +89,17 @@ class PalletBuilder {
 
   buildStorePallets(store, items) {
     const pallets = [];
-    
-    // Separate frozen from non-frozen items
-    const frozenItems = items.filter(item => item.category === 'frozen');
-    const nonFrozenItems = items.filter(item => item.category !== 'frozen');
+    const frozenItems = items.filter(function(item) { return item.category === 'frozen'; });
+    const nonFrozenItems = items.filter(function(item) { return item.category !== 'frozen'; });
 
-    // Build pallets for non-frozen items
     if (nonFrozenItems.length > 0) {
-      pallets.push(...this.createPalletsForItems(store, nonFrozenItems, 'regular'));
+      const regularPallets = this.createPalletsForItems(store, nonFrozenItems, 'regular');
+      pallets.push.apply(pallets, regularPallets);
     }
 
-    // Build separate pallets for frozen items
     if (frozenItems.length > 0) {
-      pallets.push(...this.createPalletsForItems(store, frozenItems, 'frozen'));
+      const frozenPallets = this.createPalletsForItems(store, frozenItems, 'frozen');
+      pallets.push.apply(pallets, frozenPallets);
     }
 
     return pallets;
@@ -150,16 +108,13 @@ class PalletBuilder {
   createPalletsForItems(store, items, type) {
     const pallets = [];
     let currentPallet = this.createNewPallet(store, type);
-    
-    // Sort items: heavy/stable items first, fragile/bottles last
     const sortedItems = this.sortItemsForPalletizing(items);
 
-    for (const item of sortedItems) {
-      // Check if item fits in current pallet
+    for (let i = 0; i < sortedItems.length; i++) {
+      const item = sortedItems[i];
       if (this.canAddToPallet(currentPallet, item)) {
         this.addItemToPallet(currentPallet, item);
       } else {
-        // Start new pallet
         pallets.push(currentPallet);
         currentPallet = this.createNewPallet(store, type);
         this.addItemToPallet(currentPallet, item);
@@ -174,31 +129,29 @@ class PalletBuilder {
   }
 
   sortItemsForPalletizing(items) {
-    return items.sort((a, b) => {
-      // Priority order: heavy/stable first, fragile/bottles last
-      const aScore = this.getItemPriorityScore(a);
-      const bScore = this.getItemPriorityScore(b);
+    const self = this;
+    return items.sort(function(a, b) {
+      const aScore = self.getItemPriorityScore(a);
+      const bScore = self.getItemPriorityScore(b);
       return aScore - bScore;
     });
   }
 
   getItemPriorityScore(item) {
-    if (item.fragile || item.category === 'bottles') return 3; // Place on top
-    if (item.weight > 20) return 1; // Heavy items on bottom
-    return 2; // Medium priority
+    if (item.fragile || item.category === 'bottles') return 3;
+    if (item.weight > 20) return 1;
+    return 2;
   }
 
   canAddToPallet(pallet, item) {
     const newWeight = pallet.totalWeight + (item.weight * item.quantity);
     const newHeight = pallet.currentHeight + this.calculateItemHeight(item);
-    
     return newWeight <= this.MAX_WEIGHT && newHeight <= this.MAX_HEIGHT;
   }
 
   calculateItemHeight(item) {
-    // Estimate height based on item type and quantity
-    const baseHeight = item.height || 0.3; // 30cm default
-    return Math.ceil(item.quantity / 4) * baseHeight; // 4 items per layer estimate
+    const baseHeight = item.height || 0.3;
+    return Math.ceil(item.quantity / 4) * baseHeight;
   }
 
   addItemToPallet(pallet, item) {
@@ -214,7 +167,6 @@ class PalletBuilder {
     pallet.totalWeight += item.weight * item.quantity;
     pallet.currentHeight += this.calculateItemHeight(item);
     
-    // Update special instructions
     if (item.fragile || item.category === 'bottles') {
       pallet.specialInstructions.push('Fragile items on top - Handle with care');
     }
@@ -237,13 +189,18 @@ class PalletBuilder {
 }
 
 // Routes
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+app.get('/api/health', function(req, res) {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    buildExists: fs.existsSync(path.join(__dirname, '../client/build'))
+  });
 });
 
-app.post('/api/build-pallets', (req, res) => {
+app.post('/api/build-pallets', function(req, res) {
   try {
-    const { orderLines } = req.body;
+    const orderLines = req.body.orderLines;
     
     if (!orderLines || !Array.isArray(orderLines)) {
       return res.status(400).json({ error: 'Invalid order lines provided' });
@@ -252,13 +209,24 @@ app.post('/api/build-pallets', (req, res) => {
     const palletBuilder = new PalletBuilder();
     const pallets = palletBuilder.buildPallets(orderLines);
 
+    const storeSet = {};
+    for (let i = 0; i < pallets.length; i++) {
+      storeSet[pallets[i].store] = true;
+    }
+    const uniqueStores = Object.keys(storeSet).length;
+
+    let totalWeight = 0;
+    for (let i = 0; i < pallets.length; i++) {
+      totalWeight += pallets[i].totalWeight;
+    }
+
     res.json({
       success: true,
       pallets: pallets,
       summary: {
         totalPallets: pallets.length,
-        stores: [...new Set(pallets.map(p => p.store))].length,
-        totalWeight: pallets.reduce((sum, p) => sum + p.totalWeight, 0)
+        stores: uniqueStores,
+        totalWeight: totalWeight
       }
     });
   } catch (error) {
@@ -267,26 +235,48 @@ app.post('/api/build-pallets', (req, res) => {
   }
 });
 
-app.get('/api/system-prompt', (req, res) => {
-  res.json({ systemPrompt });
+app.get('/api/system-prompt', function(req, res) {
+  res.json({ systemPrompt: systemPrompt });
 });
 
-// Serve React app for any non-API routes in production
 if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/build/index.html'));
+  app.get('*', function(req, res) {
+    const indexPath = path.join(__dirname, '../client/build/index.html');
+    
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.json({
+        message: 'Pallet Builder API is running',
+        api: {
+          health: '/api/health',
+          buildPallets: '/api/build-pallets',
+          systemPrompt: '/api/system-prompt'
+        },
+        note: 'Frontend build not found. Use API endpoints directly.'
+      });
+    }
   });
 }
 
-// Error handling middleware
-app.use((error, req, res, next) => {
+app.use(function(error, req, res, next) {
   console.error('Unhandled error:', error);
-  res.status(500).json({ error: 'Something went wrong!' });
+  res.status(500).json({ 
+    error: 'Something went wrong!',
+    details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+  });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Pallet Builder API running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+app.listen(PORT, function() {
+  console.log('🚀 Pallet Builder API running on port ' + PORT);
+  console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
+  
+  const buildPath = path.join(__dirname, '../client/build');
+  if (fs.existsSync(buildPath)) {
+    console.log('✅ React build found - serving full app');
+  } else {
+    console.log('⚠️ React build missing - API only mode');
+  }
 });
 
 module.exports = app;

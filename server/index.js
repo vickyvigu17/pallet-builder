@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
+const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
@@ -17,7 +18,15 @@ app.use(express.json());
 
 // Serve static files from React build in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/build')));
+  const buildPath = path.join(__dirname, '../client/build');
+  
+  // Check if build directory exists
+  if (fs.existsSync(buildPath)) {
+    app.use(express.static(buildPath));
+    console.log('✅ Serving React build from:', buildPath);
+  } else {
+    console.log('⚠️ Build directory not found, serving API only');
+  }
 }
 
 // System prompt for AI-driven pallet building
@@ -42,6 +51,48 @@ Output:
 Return a list of pallets with:
 - PalletID
 - Store
+- List of SKUs and quantities (cases or eaches)
+- Total Weight
+- Special Instructions
+`;
+
+// [Include all the PalletBuilder class code from before - same as previous upload]
+
+// Routes
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    buildExists: fs.existsSync(path.join(__dirname, '../client/build'))
+  });
+});
+
+// [Include all other routes - same as before]
+
+// Serve React app for any non-API routes in production
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    const indexPath = path.join(__dirname, '../client/build/index.html');
+    
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      // Fallback if build doesn't exist
+      res.json({
+        message: 'Pallet Builder API is running',
+        api: {
+          health: '/api/health',
+          buildPallets: '/api/build-pallets',
+          systemPrompt: '/api/system-prompt'
+        },
+        note: 'Frontend build not found. Use API endpoints directly.'
+      });
+    }
+  });
+}
+
+// [Rest of the code same as before]
 - List of SKUs and quantities (cases or eaches)
 - Total Weight
 - Special Instructions

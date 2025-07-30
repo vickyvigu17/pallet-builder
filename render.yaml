@@ -3,7 +3,7 @@ services:
     name: pallet-builder
     env: node
     plan: free
-    buildCommand: npm install && cd client && npm install && cd .. && npm run build
+    buildCommand: npm install && cd client && npm install && npm run build && cd ..
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -11,3 +11,5 @@ services:
         value: production
       - key: PORT
         value: 10000
+      - key: NPM_CONFIG_PRODUCTION
+        value: false

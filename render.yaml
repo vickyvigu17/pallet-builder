@@ -13,3 +13,5 @@ services:
         value: 10000
       - key: NPM_CONFIG_PRODUCTION
         value: false
+      - key: NODE_VERSION
+        value: 18

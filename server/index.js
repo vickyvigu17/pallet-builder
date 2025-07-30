@@ -16,17 +16,8 @@ app.use(helmet({
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from React build in production
-if (process.env.NODE_ENV === 'production') {
-  const buildPath = path.join(__dirname, '../client/build');
-  
-  if (fs.existsSync(buildPath)) {
-    app.use(express.static(buildPath));
-    console.log('✅ Serving React build from:', buildPath);
-  } else {
-    console.log('⚠️ Build directory not found, serving API only');
-  }
-}
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, '../public')));
 
 // System prompt
 const systemPrompt = `
@@ -194,7 +185,7 @@ app.get('/api/health', function(req, res) {
     status: 'OK', 
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    buildExists: fs.existsSync(path.join(__dirname, '../client/build'))
+    frontendAvailable: fs.existsSync(path.join(__dirname, '../public/index.html'))
   });
 });
 
@@ -239,25 +230,24 @@ app.get('/api/system-prompt', function(req, res) {
   res.json({ systemPrompt: systemPrompt });
 });
 
-if (process.env.NODE_ENV === 'production') {
-  app.get('*', function(req, res) {
-    const indexPath = path.join(__dirname, '../client/build/index.html');
-    
-    if (fs.existsSync(indexPath)) {
-      res.sendFile(indexPath);
-    } else {
-      res.json({
-        message: 'Pallet Builder API is running',
-        api: {
-          health: '/api/health',
-          buildPallets: '/api/build-pallets',
-          systemPrompt: '/api/system-prompt'
-        },
-        note: 'Frontend build not found. Use API endpoints directly.'
-      });
-    }
-  });
-}
+// Serve the main app for any non-API routes
+app.get('*', function(req, res) {
+  const indexPath = path.join(__dirname, '../public/index.html');
+  
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.json({
+      message: 'Pallet Builder API is running',
+      api: {
+        health: '/api/health',
+        buildPallets: '/api/build-pallets',
+        systemPrompt: '/api/system-prompt'
+      },
+      note: 'Frontend not found. Use API endpoints directly.'
+    });
+  }
+});
 
 app.use(function(error, req, res, next) {
   console.error('Unhandled error:', error);
@@ -271,11 +261,11 @@ app.listen(PORT, function() {
   console.log('🚀 Pallet Builder API running on port ' + PORT);
   console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
   
-  const buildPath = path.join(__dirname, '../client/build');
-  if (fs.existsSync(buildPath)) {
-    console.log('✅ React build found - serving full app');
+  const indexPath = path.join(__dirname, '../public/index.html');
+  if (fs.existsSync(indexPath)) {
+    console.log('✅ Frontend found - serving full app');
   } else {
-    console.log('⚠️ React build missing - API only mode');
+    console.log('⚠️ Frontend missing - API only mode');
   }
 });
 

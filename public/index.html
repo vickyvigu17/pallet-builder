@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pallet Builder - Distribution Center Optimization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        .btn-primary { @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200; }
+        .btn-secondary { @apply bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg border border-gray-300 transition-colors duration-200; }
+        .card { @apply bg-white rounded-lg shadow-md p-6 border border-gray-200; }
+        .input-field { @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent; }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50">
+    <header class="bg-gray-900 text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <div class="flex items-center space-x-3">
+                <i data-lucide="package" class="h-8 w-8 text-blue-400"></i>
+                <h1 class="text-3xl font-bold">Pallet Builder</h1>
+                <span class="text-gray-400">Distribution Center Optimization</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="space-y-6">
+                <div class="card">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-semibold text-gray-900">Order Lines</h2>
+                        <div class="space-x-2">
+                            <button onclick="loadSampleData()" class="btn-secondary text-sm">Load Sample</button>
+                            <button onclick="addOrderLine()" class="btn-primary">
+                                <i data-lucide="plus" class="h-4 w-4 inline mr-1"></i>Add Item
+                            </button>
+                        </div>
+                    </div>
+                    <div id="orderLines" class="space-y-4 max-h-96 overflow-y-auto"></div>
+                    <div class="mt-6">
+                        <button onclick="buildPallets()" id="buildBtn" class="btn-primary w-full py-3 text-lg">
+                            Build Pallets <i data-lucide="truck" class="h-5 w-5 inline ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <div id="summary" class="card hidden">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3">Summary</h3>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="text-center">
+                            <div id="totalPallets" class="text-2xl font-bold text-blue-600">0</div>
+                            <div class="text-sm text-gray-600">Total Pallets</div>
+                        </div>
+                        <div class="text-center">
+                            <div id="totalStores" class="text-2xl font-bold text-blue-600">0</div>
+                            <div class="text-sm text-gray-600">Stores</div>
+                        </div>
+                        <div class="text-center">
+                            <div id="totalWeight" class="text-2xl font-bold text-blue-600">0kg</div>
+                            <div class="text-sm text-gray-600">Total Weight</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="palletsSection" class="hidden">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Generated Pallets</h3>
+                    <div id="pallets" class="space-y-4 max-h-96 overflow-y-auto"></div>
+                </div>
+
+                <div id="emptyState" class="card text-center py-12">
+                    <i data-lucide="package" class="h-16 w-16 text-gray-300 mx-auto mb-4"></i>
+                    <h3 class="text-lg font-medium text-gray-600 mb-2">No Pallets Generated</h3>
+                    <p class="text-gray-500">Add order lines and click "Build Pallets" to get started.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let orderLines = [{id: 1, sku: 'SKU001', name: 'Cereal Boxes', store: 'Store A', quantity: 24, weight: 0.5, category: 'dry goods', fragile: false, height: 0.25}];
+        let nextId = 2;
+
+        function renderOrderLines() {
+            const container = document.getElementById('orderLines');
+            container.innerHTML = '';
+            orderLines.forEach(orderLine => {
+                const div = document.createElement('div');
+                div.className = 'border border-gray-200 rounded-lg p-4 bg-gray-50';
+                div.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label class="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+                        <input type="text" value="${orderLine.sku}" onchange="updateOrderLine(${orderLine.id}, 'sku', this.value)" class="input-field"></div>
+                        <div><label class="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
+                        <input type="text" value="${orderLine.name}" onchange="updateOrderLine(${orderLine.id}, 'name', this.value)" class="input-field"></div>
+                        <div><label class="block text-sm font-medium text-gray-700 mb-1">Store</label>
+                        <input type="text" value="${orderLine.store}" onchange="updateOrderLine(${orderLine.id}, 'store', this.value)" class="input-field"></div>
+                        <div><label class="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                        <input type="number" value="${orderLine.quantity}" onchange="updateOrderLine(${orderLine.id}, 'quantity', Number(this.value))" class="input-field" min="1"></div>
+                        <div><label class="block text-sm font-medium text-gray-700 mb-1">Weight (kg)</label>
+                        <input type="number" step="0.1" value="${orderLine.weight}" onchange="updateOrderLine(${orderLine.id}, 'weight', Number(this.value))" class="input-field" min="0.1"></div>
+                        <div><label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                        <select onchange="updateOrderLine(${orderLine.id}, 'category', this.value)" class="input-field">
+                            <option value="dry goods" ${orderLine.category === 'dry goods' ? 'selected' : ''}>Dry Goods</option>
+                            <option value="frozen" ${orderLine.category === 'frozen' ? 'selected' : ''}>Frozen</option>
+                            <option value="bottles" ${orderLine.category === 'bottles' ? 'selected' : ''}>Bottles</option>
+                            <option value="fragile" ${orderLine.category === 'fragile' ? 'selected' : ''}>Fragile</option>
+                        </select></div>
+                    </div>
+                    <div class="mt-4 flex items-center justify-between">
+                        <label class="flex items-center">
+                            <input type="checkbox" ${orderLine.fragile ? 'checked' : ''} onchange="updateOrderLine(${orderLine.id}, 'fragile', this.checked)" class="mr-2">
+                            <span class="text-sm text-gray-700">Fragile</span>
+                        </label>
+                        <button onclick="removeOrderLine(${orderLine.id})" class="text-red-600 hover:text-red-800">
+                            <i data-lucide="trash-2" class="h-4 w-4"></i>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        function addOrderLine() {
+            orderLines.push({id: nextId++, sku: '', name: '', store: '', quantity: 1, weight: 1, category: 'dry goods', fragile: false, height: 0.3});
+            renderOrderLines();
+        }
+
+        function removeOrderLine(id) {
+            orderLines = orderLines.filter(ol => ol.id !== id);
+            renderOrderLines();
+        }
+
+        function updateOrderLine(id, field, value) {
+            const orderLine = orderLines.find(ol => ol.id === id);
+            if (orderLine) orderLine[field] = value;
+        }
+
+        function loadSampleData() {
+            orderLines = [
+                {id: 1, sku: 'SKU001', name: 'Cereal Boxes', store: 'Store A', quantity: 48, weight: 0.5, category: 'dry goods', fragile: false, height: 0.25},
+                {id: 2, sku: 'SKU002', name: 'Frozen Pizza', store: 'Store A', quantity: 30, weight: 1.2, category: 'frozen', fragile: false, height: 0.05},
+                {id: 3, sku: 'SKU003', name: 'Glass Bottles', store: 'Store B', quantity: 24, weight: 2.0, category: 'bottles', fragile: true, height: 0.3},
+                {id: 4, sku: 'SKU004', name: 'Canned Goods', store: 'Store A', quantity: 60, weight: 0.8, category: 'dry goods', fragile: false, height: 0.15},
+                {id: 5, sku: 'SKU005', name: 'Ice Cream', store: 'Store B', quantity: 20, weight: 1.5, category: 'frozen', fragile: false, height: 0.12}
+            ];
+            nextId = 6;
+            renderOrderLines();
+        }
+
+        async function buildPallets() {
+            const btn = document.getElementById('buildBtn');
+            btn.textContent = 'Building Pallets...';
+            btn.disabled = true;
+            try {
+                const response = await fetch('/api/build-pallets', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({orderLines: orderLines.filter(ol => ol.sku && ol.name && ol.store)})
+                });
+                const data = await response.json();
+                if (data.success) displayResults(data.pallets, data.summary);
+                else alert('Error: ' + (data.error || 'Unknown error'));
+            } catch (error) {
+                alert('Error building pallets. Please try again.');
+            } finally {
+                btn.textContent = 'Build Pallets';
+                btn.disabled = false;
+            }
+        }
+
+        function displayResults(pallets, summary) {
+            document.getElementById('summary').classList.remove('hidden');
+            document.getElementById('totalPallets').textContent = summary.totalPallets;
+            document.getElementById('totalStores').textContent = summary.stores;
+            document.getElementById('totalWeight').textContent = Math.round(summary.totalWeight) + 'kg';
+            document.getElementById('palletsSection').classList.remove('hidden');
+            document.getElementById('emptyState').classList.add('hidden');
+
+            const palletsContainer = document.getElementById('pallets');
+            palletsContainer.innerHTML = '';
+            pallets.forEach((pallet, index) => {
+                const div = document.createElement('div');
+                div.className = 'card';
+                div.innerHTML = `
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="font-semibold text-gray-900">Pallet #${index + 1} - ${pallet.store}</h4>
+                        <div class="flex items-center space-x-2">
+                            ${pallet.type === 'frozen' ? '<span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">Frozen</span>' : ''}
+                            <span class="text-sm text-gray-600">${Math.round(pallet.totalWeight)}kg</span>
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        ${pallet.items.map(item => `
+                            <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                                <div class="flex items-center space-x-2">
+                                    ${item.fragile ? '<i data-lucide="alert-triangle" class="h-4 w-4 text-yellow-500"></i>' : ''}
+                                    <span class="text-sm font-medium">${item.name}</span>
+                                    <span class="text-xs text-gray-500">(${item.sku})</span>
+                                </div>
+                                <div class="text-sm text-gray-600">${item.quantity} × ${Math.round(item.weight / item.quantity * 10) / 10}kg</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    ${pallet.specialInstructions.length > 0 ? `
+                        <div class="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                            <div class="flex items-center space-x-1 mb-1">
+                                <i data-lucide="alert-triangle" class="h-4 w-4 text-yellow-600"></i>
+                                <span class="text-sm font-medium text-yellow-800">Special Instructions:</span>
+                            </div>
+                            ${pallet.specialInstructions.map(instruction => `<div class="text-sm text-yellow-700">• ${instruction}</div>`).join('')}
+                        </div>
+                    ` : ''}
+                `;
+                palletsContainer.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        renderOrderLines();
+        lucide.createIcons();
+    </script>
+</body>
+</html>

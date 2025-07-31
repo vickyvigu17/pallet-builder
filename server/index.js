@@ -96,28 +96,48 @@ class PalletBuilder {
     return pallets;
   }
 
-  createPalletsForItems(store, items, type) {
-    const pallets = [];
-    let currentPallet = this.createNewPallet(store, type);
-    const sortedItems = this.sortItemsForPalletizing(items);
+  createPalletsForItems(store, items) {
+  const maxWeight = 1000; // kg
+  const maxLayers = 7;
+  const pallets = [];
 
-    for (let i = 0; i < sortedItems.length; i++) {
-      const item = sortedItems[i];
-      if (this.canAddToPallet(currentPallet, item)) {
-        this.addItemToPallet(currentPallet, item);
-      } else {
-        pallets.push(currentPallet);
-        currentPallet = this.createNewPallet(store, type);
-        this.addItemToPallet(currentPallet, item);
+  for (const item of items) {
+    const weightPerUnit = item.weight ?? 1; // kg
+    const unitsPerCase = item.unitsPerCase ?? 12;
+    const casesPerLayer = item.casesPerLayer ?? 6;
+
+    const numCases = Math.ceil(item.quantity / unitsPerCase);
+    const layersNeeded = Math.ceil(numCases / casesPerLayer);
+
+    let placed = false;
+
+    for (const pallet of pallets) {
+      const newWeight = pallet.totalWeight + (item.quantity * weightPerUnit);
+      const newLayers = pallet.totalLayers + layersNeeded;
+
+      if (newWeight <= maxWeight && newLayers <= maxLayers) {
+        pallet.items.push(item);
+        pallet.totalWeight = newWeight;
+        pallet.totalLayers = newLayers;
+        placed = true;
+        break;
       }
     }
 
-    if (currentPallet.items.length > 0) {
-      pallets.push(currentPallet);
+    if (!placed) {
+      const pallet = {
+        id: `${store}-Pallet-${pallets.length + 1}`,
+        items: [item],
+        totalWeight: item.quantity * weightPerUnit,
+        totalLayers: layersNeeded,
+        instructions: [`Handle with care for ${item.name ?? 'item'}`],
+      };
+      pallets.push(pallet);
     }
-
-    return pallets;
   }
+
+  return pallets;
+}
 
   sortItemsForPalletizing(items) {
     const self = this;
@@ -135,10 +155,20 @@ class PalletBuilder {
   }
 
   canAddToPallet(pallet, item) {
-    const newWeight = pallet.totalWeight + (item.weight * item.quantity);
-    const newHeight = pallet.currentHeight + this.calculateItemHeight(item);
-    return newWeight <= this.MAX_WEIGHT && newHeight <= this.MAX_HEIGHT;
-  }
+  const weightPerUnit = item.weight ?? 1; // default 1kg
+  const unitsPerCase = item.unitsPerCase ?? 12;
+  const casesPerLayer = item.casesPerLayer ?? 6;
+  const maxLayers = 7;
+
+  const numCases = Math.ceil(item.quantity / unitsPerCase);
+  const layersNeeded = Math.ceil(numCases / casesPerLayer);
+
+  const newWeight = pallet.totalWeight + (item.quantity * weightPerUnit);
+  const newLayers = pallet.totalLayers + layersNeeded;
+
+  if (newWeight > 1000 || newLayers > maxLayers) return false;
+  return true;
+}
 
   calculateItemHeight(item) {
     const baseHeight = item.height || 0.3;

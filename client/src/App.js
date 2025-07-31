@@ -51,18 +51,36 @@ function App() {
     ));
   };
 
-  const buildPallets = async () => {
+  const buildPallets = async (e) => {
+    if (e) e.preventDefault();
     setLoading(true);
+    
+    // Clean and validate order lines
+    const validOrderLines = orderLines
+      .filter(ol => ol.sku && ol.name && ol.store)
+      .map(ol => ({
+        ...ol,
+        unitsPerCase: ol.unitsPerCase || 1,
+        casesPerLayer: ol.casesPerLayer || 1,
+        quantity: ol.quantity || 1,
+        weight: ol.weight || 1,
+        height: ol.height || 0.3
+      }));
+    
+    console.log('Valid order lines:', validOrderLines);
+    
     try {
       const response = await axios.post('/api/build-pallets', {
-        orderLines: orderLines.filter(ol => ol.sku && ol.name && ol.store)
+        orderLines: validOrderLines
       });
       
+      console.log('API Response:', response.data);
       setPallets(response.data.pallets);
       setSummary(response.data.summary);
     } catch (error) {
       console.error('Error building pallets:', error);
-      alert('Error building pallets. Please try again.');
+      console.error('Error details:', error.response?.data);
+      alert('Error building pallets. Please check console for details.');
     } finally {
       setLoading(false);
     }
@@ -283,7 +301,11 @@ function App() {
               
               <div className="mt-6">
                 <button
-                  onClick={buildPallets}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    buildPallets(e);
+                  }}
                   disabled={loading || orderLines.length === 0}
                   className="btn-primary w-full py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >

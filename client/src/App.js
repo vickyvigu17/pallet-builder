@@ -13,7 +13,9 @@ function App() {
       weight: 0.5,
       category: 'dry goods',
       fragile: false,
-      height: 0.25
+      height: 0.25,
+      unitsPerCase: 12,
+      casesPerLayer: 6
     }
   ]);
   const [pallets, setPallets] = useState([]);
@@ -31,7 +33,9 @@ function App() {
       weight: 1,
       category: 'dry goods',
       fragile: false,
-      height: 0.3
+      height: 0.3,
+      unitsPerCase: 1,
+      casesPerLayer: 1
     }]);
   };
 
@@ -42,7 +46,7 @@ function App() {
   const updateOrderLine = (id, field, value) => {
     setOrderLines(orderLines.map(ol => 
       ol.id === id 
-        ? { ...ol, [field]: field === 'quantity' || field === 'weight' || field === 'height' ? Number(value) : value }
+        ? { ...ol, [field]: field === 'quantity' || field === 'weight' || field === 'height' || field === 'unitsPerCase' || field === 'casesPerLayer' ? Number(value) : value }
         : ol
     ));
   };
@@ -75,7 +79,9 @@ function App() {
         weight: 0.5,
         category: 'dry goods',
         fragile: false,
-        height: 0.25
+        height: 0.25,
+        unitsPerCase: 12,
+        casesPerLayer: 8
       },
       {
         id: 2,
@@ -86,7 +92,9 @@ function App() {
         weight: 1.2,
         category: 'frozen',
         fragile: false,
-        height: 0.05
+        height: 0.05,
+        unitsPerCase: 6,
+        casesPerLayer: 4
       },
       {
         id: 3,
@@ -97,7 +105,9 @@ function App() {
         weight: 2.0,
         category: 'bottles',
         fragile: true,
-        height: 0.3
+        height: 0.3,
+        unitsPerCase: 24,
+        casesPerLayer: 3
       },
       {
         id: 4,
@@ -108,7 +118,9 @@ function App() {
         weight: 0.8,
         category: 'dry goods',
         fragile: false,
-        height: 0.15
+        height: 0.15,
+        unitsPerCase: 24,
+        casesPerLayer: 6
       },
       {
         id: 5,
@@ -119,7 +131,9 @@ function App() {
         weight: 1.5,
         category: 'frozen',
         fragile: false,
-        height: 0.12
+        height: 0.12,
+        unitsPerCase: 4,
+        casesPerLayer: 5
       }
     ]);
   };
@@ -208,6 +222,28 @@ function App() {
                           onChange={(e) => updateOrderLine(orderLine.id, 'weight', e.target.value)}
                           className="input-field"
                           min="0.1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-warehouse-700 mb-1">Items per Case</label>
+                        <input
+                          type="number"
+                          value={orderLine.unitsPerCase}
+                          onChange={(e) => updateOrderLine(orderLine.id, 'unitsPerCase', e.target.value)}
+                          className="input-field"
+                          min="1"
+                          placeholder="e.g., 12"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-warehouse-700 mb-1">Cases per Layer</label>
+                        <input
+                          type="number"
+                          value={orderLine.casesPerLayer}
+                          onChange={(e) => updateOrderLine(orderLine.id, 'casesPerLayer', e.target.value)}
+                          className="input-field"
+                          min="1"
+                          placeholder="e.g., 6"
                         />
                       </div>
                       <div>

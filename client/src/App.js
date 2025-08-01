@@ -343,10 +343,10 @@ function App() {
                 <h3 className="text-lg font-semibold text-warehouse-900">Generated Pallets</h3>
                 <div className="space-y-4 max-h-96 overflow-y-auto">
                   {pallets.map((pallet, index) => (
-                    <div key={pallet.palletId} className="card">
+                    <div key={pallet.id || pallet.palletId || index} className="card">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="font-semibold text-warehouse-900">
-                          Pallet #{index + 1} - {pallet.store}
+                          Pallet #{index + 1} - {pallet.store || 'Unknown Store'}
                         </h4>
                         <div className="flex items-center space-x-2">
                           {pallet.type === 'frozen' && (
@@ -355,33 +355,33 @@ function App() {
                             </span>
                           )}
                           <span className="text-sm text-warehouse-600">
-                            {Math.round(pallet.totalWeight)}kg
+                            {Math.round(pallet.totalWeight || 0)}kg
                           </span>
                         </div>
                       </div>
                       
                       <div className="space-y-2">
-                        {pallet.items.map((item, itemIndex) => (
+                        {(pallet.items || []).map((item, itemIndex) => (
                           <div key={itemIndex} className="flex items-center justify-between py-2 border-b border-warehouse-100 last:border-b-0">
                             <div className="flex items-center space-x-2">
                               {item.fragile && <AlertTriangle className="h-4 w-4 text-yellow-500" />}
-                              <span className="text-sm font-medium">{item.name}</span>
+                              <span className="text-sm font-medium">{item.name || item.sku}</span>
                               <span className="text-xs text-warehouse-500">({item.sku})</span>
                             </div>
                             <div className="text-sm text-warehouse-600">
-                              {item.quantity} × {Math.round(item.weight / item.quantity * 10) / 10}kg
+                              {item.quantity} × {Math.round((item.weight || 0) / (item.quantity || 1) * 10) / 10}kg
                             </div>
                           </div>
                         ))}
                       </div>
                       
-                      {pallet.specialInstructions.length > 0 && (
+                      {(pallet.specialInstructions || pallet.instructions || []).length > 0 && (
                         <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
                           <div className="flex items-center space-x-1 mb-1">
                             <AlertTriangle className="h-4 w-4 text-yellow-600" />
                             <span className="text-sm font-medium text-yellow-800">Special Instructions:</span>
                           </div>
-                          {pallet.specialInstructions.map((instruction, idx) => (
+                          {(pallet.specialInstructions || pallet.instructions || []).map((instruction, idx) => (
                             <div key={idx} className="text-sm text-yellow-700">• {instruction}</div>
                           ))}
                         </div>

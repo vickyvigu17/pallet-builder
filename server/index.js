@@ -96,7 +96,7 @@ class PalletBuilder {
     return pallets;
   }
 
-  createPalletsForItems(store, items) {
+  createPalletsForItems(store, items, type) {
   const maxWeight = 1000; // kg
   const maxLayers = 7;
   const pallets = [];
@@ -119,6 +119,15 @@ class PalletBuilder {
         pallet.items.push(item);
         pallet.totalWeight = newWeight;
         pallet.totalLayers = newLayers;
+        // Add any special instructions for this item
+        if (item.fragile || item.category === 'bottles') {
+          pallet.instructions.push('Fragile items - Handle with care');
+          pallet.specialInstructions.push('Fragile items - Handle with care');
+        }
+        if (item.category === 'frozen') {
+          pallet.instructions.push('Keep frozen - Temperature controlled');
+          pallet.specialInstructions.push('Keep frozen - Temperature controlled');
+        }
         placed = true;
         break;
       }
@@ -127,10 +136,13 @@ class PalletBuilder {
     if (!placed) {
       const pallet = {
         id: `${store}-Pallet-${pallets.length + 1}`,
+        store: store,
+        type: type || 'regular',
         items: [item],
         totalWeight: item.quantity * weightPerUnit,
         totalLayers: layersNeeded,
         instructions: [`Handle with care for ${item.name ?? 'item'}`],
+        specialInstructions: [`Handle with care for ${item.name ?? 'item'}`]
       };
       pallets.push(pallet);
     }

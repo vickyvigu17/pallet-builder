@@ -21,6 +21,7 @@ function App() {
   const [pallets, setPallets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState(null);
+  const [llmInsights, setLlmInsights] = useState(null);
 
   const addOrderLine = () => {
     const newId = Math.max(...orderLines.map(ol => ol.id), 0) + 1;
@@ -76,7 +77,25 @@ function App() {
       
       console.log('API Response:', response.data);
       setPallets(response.data.pallets);
-      setSummary(response.data.summary);
+      setLlmInsights(response.data.llmInsights);
+      
+      // Calculate summary from pallets
+      const storeSet = {};
+      for (let i = 0; i < response.data.pallets.length; i++) {
+        storeSet[response.data.pallets[i].store] = true;
+      }
+      const uniqueStores = Object.keys(storeSet).length;
+      
+      let totalWeight = 0;
+      for (let i = 0; i < response.data.pallets.length; i++) {
+        totalWeight += response.data.pallets[i].totalWeight;
+      }
+      
+      setSummary({
+        totalPallets: response.data.pallets.length,
+        stores: uniqueStores,
+        totalWeight: totalWeight
+      });
     } catch (error) {
       console.error('Error building pallets:', error);
       console.error('Error details:', error.response?.data);
@@ -318,6 +337,78 @@ function App() {
 
           {/* Pallet Results Section */}
           <div className="space-y-6">
+            {/* LLM Insights Section */}
+            {llmInsights && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-warehouse-900 flex items-center">
+                  🤖 AI Optimization Insights
+                </h3>
+                
+                {/* Cost Savings */}
+                <div className="card bg-green-50 border-green-200">
+                  <h4 className="font-semibold text-green-800 mb-2">💰 Cost Analysis</h4>
+                  <p className="text-green-700">{llmInsights.costSavings}</p>
+                </div>
+
+                {/* Safety Warnings */}
+                {llmInsights.safetyWarnings && llmInsights.safetyWarnings.length > 0 && (
+                  <div className="card bg-red-50 border-red-200">
+                    <h4 className="font-semibold text-red-800 mb-2">⚠️ Safety Warnings</h4>
+                    <div className="space-y-1">
+                      {llmInsights.safetyWarnings.map((warning, idx) => (
+                        <div key={idx} className="text-red-700 text-sm">• {warning}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Loose Item Strategy */}
+                {llmInsights.looseItemStrategy && (
+                  <div className="card bg-blue-50 border-blue-200">
+                    <h4 className="font-semibold text-blue-800 mb-2">📦 Loose Item Management</h4>
+                    <p className="text-blue-700 text-sm">{llmInsights.looseItemStrategy}</p>
+                  </div>
+                )}
+
+                {/* Recommendations */}
+                {llmInsights.recommendations && llmInsights.recommendations.length > 0 && (
+                  <div className="card bg-yellow-50 border-yellow-200">
+                    <h4 className="font-semibold text-yellow-800 mb-2">💡 AI Recommendations</h4>
+                    <div className="space-y-1">
+                      {llmInsights.recommendations.map((rec, idx) => (
+                        <div key={idx} className="text-yellow-700 text-sm">• {rec}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Detailed Analysis */}
+                {llmInsights.analysis && (
+                  <div className="card">
+                    <h4 className="font-semibold text-warehouse-900 mb-2">📊 Detailed Analysis</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div className="text-center">
+                        <div className="text-xl font-bold text-primary-600">{llmInsights.analysis.totalPallets}</div>
+                        <div className="text-warehouse-600">Total Pallets</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xl font-bold text-primary-600">{llmInsights.analysis.averageUtilization?.toFixed(1)}%</div>
+                        <div className="text-warehouse-600">Avg Utilization</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xl font-bold text-primary-600">{llmInsights.analysis.looseItems?.length || 0}</div>
+                        <div className="text-warehouse-600">Loose Items</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xl font-bold text-primary-600">{llmInsights.analysis.fragileItems?.length || 0}</div>
+                        <div className="text-warehouse-600">Fragile Items</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {summary && (
               <div className="card">
                 <h3 className="text-lg font-semibold text-warehouse-900 mb-3">Summary</h3>

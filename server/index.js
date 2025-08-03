@@ -123,59 +123,59 @@ class PalletBuilder {
   }
 
   createPalletsForItems(store, items, type) {
-  const maxWeight = 1000; // kg
-  const maxLayers = 7;
-  const pallets = [];
+    const maxWeight = 1000; // kg
+    const maxLayers = 7;
+    const pallets = [];
 
-  for (const item of items) {
-    const weightPerUnit = item.weight ?? 1; // kg
-    const unitsPerCase = item.unitsPerCase ?? 12;
-    const casesPerLayer = item.casesPerLayer ?? 6;
+    for (const item of items) {
+      const weightPerUnit = item.weight ?? 1; // kg
+      const unitsPerCase = item.unitsPerCase ?? 12;
+      const casesPerLayer = item.casesPerLayer ?? 6;
 
-    const numCases = Math.ceil(item.quantity / unitsPerCase);
-    const layersNeeded = Math.ceil(numCases / casesPerLayer);
+      const numCases = Math.ceil(item.quantity / unitsPerCase);
+      const layersNeeded = Math.ceil(numCases / casesPerLayer);
 
-    let placed = false;
+      let placed = false;
 
-    for (const pallet of pallets) {
-      const newWeight = pallet.totalWeight + (item.quantity * weightPerUnit);
-      const newLayers = pallet.totalLayers + layersNeeded;
+      for (const pallet of pallets) {
+        const newWeight = pallet.totalWeight + (item.quantity * weightPerUnit);
+        const newLayers = pallet.totalLayers + layersNeeded;
 
-      if (newWeight <= maxWeight && newLayers <= maxLayers) {
-        pallet.items.push(item);
-        pallet.totalWeight = newWeight;
-        pallet.totalLayers = newLayers;
-        // Add any special instructions for this item
-        if (item.fragile || item.category === 'bottles') {
-          pallet.instructions.push('Fragile items - Handle with care');
-          pallet.specialInstructions.push('Fragile items - Handle with care');
+        if (newWeight <= maxWeight && newLayers <= maxLayers) {
+          pallet.items.push(item);
+          pallet.totalWeight = newWeight;
+          pallet.totalLayers = newLayers;
+          // Add any special instructions for this item
+          if (item.fragile || item.category === 'bottles') {
+            pallet.instructions.push('Fragile items - Handle with care');
+            pallet.specialInstructions.push('Fragile items - Handle with care');
+          }
+          if (item.category === 'frozen') {
+            pallet.instructions.push('Keep frozen - Temperature controlled');
+            pallet.specialInstructions.push('Keep frozen - Temperature controlled');
+          }
+          placed = true;
+          break;
         }
-        if (item.category === 'frozen') {
-          pallet.instructions.push('Keep frozen - Temperature controlled');
-          pallet.specialInstructions.push('Keep frozen - Temperature controlled');
-        }
-        placed = true;
-        break;
+      }
+
+      if (!placed) {
+        const pallet = {
+          id: `${store}-Pallet-${pallets.length + 1}`,
+          store: store,
+          type: type || 'regular',
+          items: [item],
+          totalWeight: item.quantity * weightPerUnit,
+          totalLayers: layersNeeded,
+          instructions: [`Handle with care for ${item.name ?? 'item'}`],
+          specialInstructions: [`Handle with care for ${item.name ?? 'item'}`]
+        };
+        pallets.push(pallet);
       }
     }
 
-    if (!placed) {
-      const pallet = {
-        id: `${store}-Pallet-${pallets.length + 1}`,
-        store: store,
-        type: type || 'regular',
-        items: [item],
-        totalWeight: item.quantity * weightPerUnit,
-        totalLayers: layersNeeded,
-        instructions: [`Handle with care for ${item.name ?? 'item'}`],
-        specialInstructions: [`Handle with care for ${item.name ?? 'item'}`]
-      };
-      pallets.push(pallet);
-    }
+    return pallets;
   }
-
-  return pallets;
-}
 
   sortItemsForPalletizing(items) {
     const self = this;
@@ -193,20 +193,20 @@ class PalletBuilder {
   }
 
   canAddToPallet(pallet, item) {
-  const weightPerUnit = item.weight ?? 1; // default 1kg
-  const unitsPerCase = item.unitsPerCase ?? 12;
-  const casesPerLayer = item.casesPerLayer ?? 6;
-  const maxLayers = 7;
+    const weightPerUnit = item.weight ?? 1; // default 1kg
+    const unitsPerCase = item.unitsPerCase ?? 12;
+    const casesPerLayer = item.casesPerLayer ?? 6;
+    const maxLayers = 7;
 
-  const numCases = Math.ceil(item.quantity / unitsPerCase);
-  const layersNeeded = Math.ceil(numCases / casesPerLayer);
+    const numCases = Math.ceil(item.quantity / unitsPerCase);
+    const layersNeeded = Math.ceil(numCases / casesPerLayer);
 
-  const newWeight = pallet.totalWeight + (item.quantity * weightPerUnit);
-  const newLayers = pallet.totalLayers + layersNeeded;
+    const newWeight = pallet.totalWeight + (item.quantity * weightPerUnit);
+    const newLayers = pallet.totalLayers + layersNeeded;
 
-  if (newWeight > 1000 || newLayers > maxLayers) return false;
-  return true;
-}
+    if (newWeight > 1000 || newLayers > maxLayers) return false;
+    return true;
+  }
 
   calculateItemHeight(item) {
     const baseHeight = item.height || 0.3;
@@ -732,12 +732,16 @@ app.post('/api/implement-recommendations', function(req, res) {
   try {
     const { pallets, orderLines, implementableActions } = req.body;
     
-    if (!pallets || !implementableActions) {
+    // Validate pallets input only
+    if (!pallets) {
       return res.status(400).json({ error: 'Missing required data for implementation' });
     }
 
+    // Default implementableActions to empty array if not provided
+    const safeActions = Array.isArray(implementableActions) ? implementableActions : [];
+
     const llmOptimizer = new LLMPalletOptimizer();
-    const implementation = llmOptimizer.implementRecommendations(pallets, orderLines, implementableActions);
+    const implementation = llmOptimizer.implementRecommendations(pallets, orderLines, safeActions);
     
     // Re-analyze the optimized pallets
     const newAnalysis = llmOptimizer.analyzePalletConfiguration(implementation.optimizedPallets, orderLines);

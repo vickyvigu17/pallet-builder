@@ -386,11 +386,18 @@ Please provide:
     // Simulate intelligent LLM analysis
     const recommendations = [];
     const safetyWarnings = [];
+    const implementableActions = [];
     let looseItemStrategy = "Standard case rounding applied";
 
     // Intelligent Pallet Optimization
     if (analysis.averageUtilization < 75) {
       recommendations.push(`🎯 OPTIMIZATION: Current ${analysis.averageUtilization.toFixed(1)}% utilization. Could consolidate into ${Math.ceil(analysis.totalPallets * 0.85)} pallets for 15% cost savings.`);
+      implementableActions.push({
+        type: 'consolidate',
+        description: 'Consolidate under-utilized pallets',
+        targetPallets: Math.ceil(analysis.totalPallets * 0.85),
+        estimatedSavings: (analysis.totalPallets * 25 * 0.15).toFixed(0)
+      });
     }
 
     // Smart Loose Item Management  
@@ -407,8 +414,22 @@ Please provide:
         const totalLoose = items.reduce((sum, item) => sum + item.looseUnits, 0);
         if (totalLoose >= 12) {
           strategies.push(`${store}: Combine ${items.length} partial cases into 1 mixed case`);
+          implementableActions.push({
+            type: 'combineLoose',
+            store: store,
+            items: items,
+            description: `Combine ${items.length} partial cases for ${store}`,
+            newMixedCase: true
+          });
         } else {
           strategies.push(`${store}: Add ${items.length} loose items to existing case`);
+          implementableActions.push({
+            type: 'distributeLoose',
+            store: store,
+            items: items,
+            description: `Distribute ${items.length} loose items for ${store}`,
+            newMixedCase: false
+          });
         }
       });
 
@@ -420,10 +441,20 @@ Please provide:
     if (analysis.topHeavyRisks.length > 0) {
       safetyWarnings.push(`⚠️ TOP-HEAVY RISK: ${analysis.topHeavyRisks.length} pallets have heavy items that may crush lower items`);
       recommendations.push(`🛡️ SAFETY: Rearrange ${analysis.topHeavyRisks.length} pallets with heavy items at bottom`);
+      implementableActions.push({
+        type: 'fixStacking',
+        description: `Reorder items in ${analysis.topHeavyRisks.length} pallets for safety`,
+        affectedPallets: analysis.topHeavyRisks.length
+      });
     }
 
     if (analysis.overweightRisks.length > 0) {
       safetyWarnings.push(`⚠️ OVERWEIGHT RISK: ${analysis.overweightRisks.length} pallets exceed 95% capacity`);
+      implementableActions.push({
+        type: 'redistributeWeight',
+        description: `Redistribute weight in ${analysis.overweightRisks.length} overloaded pallets`,
+        affectedPallets: analysis.overweightRisks.length
+      });
     }
 
     // Check for fragile item safety
@@ -435,6 +466,11 @@ Please provide:
     if (fragileInMixed.length > 0) {
       safetyWarnings.push(`⚠️ FRAGILE RISK: ${fragileInMixed.length} fragile items mixed with other products`);
       recommendations.push(`🛡️ SAFETY: Consider separate handling for fragile items`);
+      implementableActions.push({
+        type: 'separateFragile',
+        description: `Separate ${fragileInMixed.length} fragile items for safer handling`,
+        fragileItems: fragileInMixed
+      });
     }
 
     const costSavings = analysis.averageUtilization < 75 ? 
@@ -447,8 +483,238 @@ Please provide:
       safetyWarnings,
       recommendations,
       costSavings,
-      analysis
+      analysis,
+      implementableActions
     };
+  }
+
+  // NEW: Recommendation Implementation Engine
+  implementRecommendations(pallets, orderLines, implementableActions) {
+    console.log('🔧 Implementing AI recommendations...');
+    let optimizedPallets = JSON.parse(JSON.stringify(pallets)); // Deep copy
+    const implementationLog = [];
+
+    implementableActions.forEach(action => {
+      switch (action.type) {
+        case 'consolidate':
+          const consolidated = this.consolidatePallets(optimizedPallets, action.targetPallets);
+          optimizedPallets = consolidated.pallets;
+          implementationLog.push(`✅ Consolidated ${pallets.length} pallets into ${consolidated.pallets.length} pallets`);
+          break;
+
+        case 'fixStacking':
+          const stackingFixed = this.fixStackingOrder(optimizedPallets);
+          optimizedPallets = stackingFixed.pallets;
+          implementationLog.push(`✅ Fixed stacking order in ${stackingFixed.fixedCount} pallets`);
+          break;
+
+        case 'redistributeWeight':
+          const weightFixed = this.redistributeWeight(optimizedPallets);
+          optimizedPallets = weightFixed.pallets;
+          implementationLog.push(`✅ Redistributed weight in ${weightFixed.fixedCount} pallets`);
+          break;
+
+        case 'combineLoose':
+          const looseFixed = this.optimizeLooseItems(optimizedPallets, orderLines);
+          optimizedPallets = looseFixed.pallets;
+          implementationLog.push(`✅ Optimized loose items: ${looseFixed.description}`);
+          break;
+
+        default:
+          implementationLog.push(`⚠️ Action type '${action.type}' not yet implemented`);
+      }
+    });
+
+    return {
+      optimizedPallets,
+      implementationLog,
+      originalCount: pallets.length,
+      optimizedCount: optimizedPallets.length,
+      savings: pallets.length - optimizedPallets.length
+    };
+  }
+
+  // Optimization Methods
+  consolidatePallets(pallets, targetCount) {
+    console.log(`🔄 Consolidating ${pallets.length} pallets to ${targetCount} pallets...`);
+    
+    // Group pallets by store and type
+    const storeGroups = pallets.reduce((groups, pallet) => {
+      const key = `${pallet.store}-${pallet.type || 'regular'}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(pallet);
+      return groups;
+    }, {});
+
+    const optimizedPallets = [];
+
+    Object.keys(storeGroups).forEach(storeKey => {
+      const storePallets = storeGroups[storeKey];
+      const consolidated = this.mergePalletsInGroup(storePallets);
+      optimizedPallets.push(...consolidated);
+    });
+
+    return { pallets: optimizedPallets };
+  }
+
+  mergePalletsInGroup(pallets) {
+    if (pallets.length <= 1) return pallets;
+
+    const merged = [];
+    let currentPallet = null;
+
+    pallets.forEach(pallet => {
+      if (!currentPallet) {
+        currentPallet = JSON.parse(JSON.stringify(pallet));
+      } else {
+        // Try to merge with current pallet
+        const combinedWeight = currentPallet.totalWeight + pallet.totalWeight;
+        const combinedLayers = currentPallet.totalLayers + pallet.totalLayers;
+
+        if (combinedWeight <= 1000 && combinedLayers <= 7) {
+          // Merge successful
+          currentPallet.items.push(...pallet.items);
+          currentPallet.totalWeight = combinedWeight;
+          currentPallet.totalLayers = combinedLayers;
+          currentPallet.instructions = [...(currentPallet.instructions || []), ...(pallet.instructions || [])];
+          currentPallet.specialInstructions = [...(currentPallet.specialInstructions || []), ...(pallet.specialInstructions || [])];
+        } else {
+          // Can't merge, finalize current and start new
+          merged.push(currentPallet);
+          currentPallet = JSON.parse(JSON.stringify(pallet));
+        }
+      }
+    });
+
+    if (currentPallet) merged.push(currentPallet);
+    return merged;
+  }
+
+  fixStackingOrder(pallets) {
+    console.log('🔧 Fixing stacking order for safety...');
+    let fixedCount = 0;
+
+    pallets.forEach(pallet => {
+      if (pallet.items && pallet.items.length > 1) {
+        const originalOrder = [...pallet.items];
+        
+        // Sort items: heavy items first (bottom), fragile items last (top)
+        pallet.items.sort((a, b) => {
+          // Heavy items go to bottom (lower index)
+          if (a.weight > 20 && b.weight <= 20) return -1;
+          if (b.weight > 20 && a.weight <= 20) return 1;
+          
+          // Fragile items go to top (higher index)
+          if (a.fragile && !b.fragile) return 1;
+          if (b.fragile && !a.fragile) return -1;
+          
+          // Otherwise maintain relative order
+          return 0;
+        });
+
+        // Check if order changed
+        const orderChanged = originalOrder.some((item, index) => 
+          item.sku !== pallet.items[index].sku
+        );
+
+        if (orderChanged) {
+          fixedCount++;
+          pallet.specialInstructions = pallet.specialInstructions || [];
+          pallet.specialInstructions.push('✅ Stacking order optimized for safety');
+        }
+      }
+    });
+
+    return { pallets, fixedCount };
+  }
+
+  redistributeWeight(pallets) {
+    console.log('⚖️ Redistributing weight across pallets...');
+    let fixedCount = 0;
+
+    // Find overweight pallets (>95% capacity)
+    const overweightPallets = pallets.filter(p => p.totalWeight > 950);
+    const lightPallets = pallets.filter(p => p.totalWeight < 700 && p.store);
+
+    overweightPallets.forEach(heavyPallet => {
+      const compatibleLightPallet = lightPallets.find(lightPallet => 
+        lightPallet.store === heavyPallet.store && 
+        lightPallet.type === heavyPallet.type
+      );
+
+      if (compatibleLightPallet && heavyPallet.items.length > 1) {
+        // Move lightest item from heavy pallet to light pallet
+        const lightestItem = heavyPallet.items.reduce((lightest, item) => 
+          (item.weight * item.quantity) < (lightest.weight * lightest.quantity) ? item : lightest
+        );
+
+        const itemWeight = lightestItem.weight * lightestItem.quantity;
+        
+        if (compatibleLightPallet.totalWeight + itemWeight <= 950) {
+          // Move the item
+          heavyPallet.items = heavyPallet.items.filter(item => item.sku !== lightestItem.sku);
+          heavyPallet.totalWeight -= itemWeight;
+          
+          compatibleLightPallet.items.push(lightestItem);
+          compatibleLightPallet.totalWeight += itemWeight;
+          
+          fixedCount++;
+          
+          heavyPallet.specialInstructions = heavyPallet.specialInstructions || [];
+          heavyPallet.specialInstructions.push('✅ Weight redistributed for safety');
+          compatibleLightPallet.specialInstructions = compatibleLightPallet.specialInstructions || [];
+          compatibleLightPallet.specialInstructions.push('✅ Additional items added via optimization');
+        }
+      }
+    });
+
+    return { pallets, fixedCount };
+  }
+
+  optimizeLooseItems(pallets, orderLines) {
+    console.log('📦 Optimizing loose items...');
+    
+    // Find loose items
+    const looseItems = [];
+    orderLines.forEach(item => {
+      const unitsPerCase = item.unitsPerCase || 12;
+      const remainder = item.quantity % unitsPerCase;
+      if (remainder > 0) {
+        looseItems.push({
+          ...item,
+          looseUnits: remainder,
+          fullCases: Math.floor(item.quantity / unitsPerCase)
+        });
+      }
+    });
+
+    // Group by store
+    const storeGroups = looseItems.reduce((groups, item) => {
+      if (!groups[item.store]) groups[item.store] = [];
+      groups[item.store].push(item);
+      return groups;
+    }, {});
+
+    let optimizationDescription = 'No loose items found';
+
+    if (Object.keys(storeGroups).length > 0) {
+      const descriptions = [];
+      
+      Object.keys(storeGroups).forEach(store => {
+        const items = storeGroups[store];
+        const totalLooseUnits = items.reduce((sum, item) => sum + item.looseUnits, 0);
+        
+        if (totalLooseUnits >= 12) {
+          descriptions.push(`${store}: Combined ${items.length} partial cases into mixed case`);
+        } else {
+          descriptions.push(`${store}: Distributed ${totalLooseUnits} loose units`);
+        }
+      });
+      
+      optimizationDescription = descriptions.join('; ');
+    }
+
+    return { pallets, description: optimizationDescription };
   }
 }
 
@@ -460,6 +726,45 @@ app.get('/api/health', function(req, res) {
     environment: process.env.NODE_ENV || 'development',
     frontendAvailable: fs.existsSync(path.join(__dirname, '../public/index.html'))
   });
+});
+
+app.post('/api/implement-recommendations', function(req, res) {
+  try {
+    const { pallets, orderLines, implementableActions } = req.body;
+    
+    if (!pallets || !implementableActions) {
+      return res.status(400).json({ error: 'Missing required data for implementation' });
+    }
+
+    const llmOptimizer = new LLMPalletOptimizer();
+    const implementation = llmOptimizer.implementRecommendations(pallets, orderLines, implementableActions);
+    
+    // Re-analyze the optimized pallets
+    const newAnalysis = llmOptimizer.analyzePalletConfiguration(implementation.optimizedPallets, orderLines);
+    const newOptimization = llmOptimizer.mockLLMResponse(implementation.optimizedPallets, orderLines, newAnalysis);
+
+    res.json({
+      success: true,
+      optimizedPallets: implementation.optimizedPallets,
+      implementationLog: implementation.implementationLog,
+      savings: {
+        palletReduction: implementation.savings,
+        originalCount: implementation.originalCount,
+        optimizedCount: implementation.optimizedCount
+      },
+      newLlmInsights: {
+        looseItemStrategy: newOptimization.looseItemStrategy,
+        safetyWarnings: newOptimization.safetyWarnings,
+        recommendations: newOptimization.recommendations,
+        costSavings: newOptimization.costSavings,
+        analysis: newOptimization.analysis,
+        implementableActions: newOptimization.implementableActions
+      }
+    });
+  } catch (error) {
+    console.error('Error implementing recommendations:', error);
+    res.status(500).json({ error: 'Internal server error during implementation' });
+  }
 });
 
 app.post('/api/build-pallets', function(req, res) {

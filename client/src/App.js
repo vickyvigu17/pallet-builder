@@ -22,6 +22,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState(null);
   const [llmInsights, setLlmInsights] = useState(null);
+  const [originalOrderLines, setOriginalOrderLines] = useState([]);
+  const [implementationLoading, setImplementationLoading] = useState(false);
+  const [implementationLog, setImplementationLog] = useState([]);
 
   const addOrderLine = () => {
     const newId = Math.max(...orderLines.map(ol => ol.id), 0) + 1;
@@ -68,6 +71,9 @@ function App() {
         height: ol.height || 0.3
       }));
     
+    // Store original order lines for implementation
+    setOriginalOrderLines(validOrderLines);
+    
     console.log('Valid order lines:', validOrderLines);
     
     try {
@@ -78,6 +84,7 @@ function App() {
       console.log('API Response:', response.data);
       setPallets(response.data.pallets);
       setLlmInsights(response.data.llmInsights);
+      setImplementationLog([]); // Clear previous implementation log
       
       // Calculate summary from pallets
       const storeSet = {};
@@ -102,6 +109,57 @@ function App() {
       alert('Error building pallets. Please check console for details.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const implementRecommendations = async () => {
+    if (!llmInsights?.implementableActions || llmInsights.implementableActions.length === 0) {
+      alert('No implementable recommendations available.');
+      return;
+    }
+
+    setImplementationLoading(true);
+    
+    try {
+      const response = await axios.post('/api/implement-recommendations', {
+        pallets: pallets,
+        orderLines: originalOrderLines,
+        implementableActions: llmInsights.implementableActions
+      });
+
+      console.log('Implementation Response:', response.data);
+      
+      if (response.data.success) {
+        // Update pallets with optimized version
+        setPallets(response.data.optimizedPallets);
+        setLlmInsights(response.data.newLlmInsights);
+        setImplementationLog(response.data.implementationLog);
+        
+        // Update summary
+        const storeSet = {};
+        for (let i = 0; i < response.data.optimizedPallets.length; i++) {
+          storeSet[response.data.optimizedPallets[i].store] = true;
+        }
+        const uniqueStores = Object.keys(storeSet).length;
+        
+        let totalWeight = 0;
+        for (let i = 0; i < response.data.optimizedPallets.length; i++) {
+          totalWeight += response.data.optimizedPallets[i].totalWeight;
+        }
+        
+        setSummary({
+          totalPallets: response.data.optimizedPallets.length,
+          stores: uniqueStores,
+          totalWeight: totalWeight
+        });
+
+        alert(`✅ Recommendations implemented successfully!\n\nPallet reduction: ${response.data.savings.originalCount} → ${response.data.savings.optimizedCount} pallets\nSavings: ${response.data.savings.palletReduction} pallets`);
+      }
+    } catch (error) {
+      console.error('Error implementing recommendations:', error);
+      alert('Error implementing recommendations. Please try again.');
+    } finally {
+      setImplementationLoading(false);
     }
   };
 
@@ -340,9 +398,41 @@ function App() {
             {/* LLM Insights Section */}
             {llmInsights && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-warehouse-900 flex items-center">
-                  🤖 AI Optimization Insights
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-warehouse-900 flex items-center">
+                    🤖 AI Optimization Insights
+                  </h3>
+                  {llmInsights.implementableActions && llmInsights.implementableActions.length > 0 && (
+                    <button
+                      onClick={implementRecommendations}
+                      disabled={implementationLoading}
+                      className="btn-primary flex items-center space-x-2 disabled:opacity-50"
+                    >
+                      {implementationLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Implementing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>🚀 Implement Recommendations</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {/* Implementation Log */}
+                {implementationLog && implementationLog.length > 0 && (
+                  <div className="card bg-green-50 border-green-200">
+                    <h4 className="font-semibold text-green-800 mb-2">🎯 Implementation Results</h4>
+                    <div className="space-y-1">
+                      {implementationLog.map((log, idx) => (
+                        <div key={idx} className="text-green-700 text-sm">• {log}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 {/* Cost Savings */}
                 <div className="card bg-green-50 border-green-200">

@@ -82,6 +82,8 @@ function App() {
       });
       
       console.log('API Response:', response.data);
+      console.log('LLM Insights:', response.data.llmInsights);
+      console.log('Implementable Actions:', response.data.llmInsights?.implementableActions);
       setPallets(response.data.pallets);
       setLlmInsights(response.data.llmInsights);
       setImplementationLog([]); // Clear previous implementation log
@@ -402,23 +404,30 @@ function App() {
                   <h3 className="text-lg font-semibold text-warehouse-900 flex items-center">
                     🤖 AI Optimization Insights
                   </h3>
-                  {llmInsights.implementableActions && llmInsights.implementableActions.length > 0 && (
-                    <button
-                      onClick={implementRecommendations}
-                      disabled={implementationLoading}
-                      className="btn-primary flex items-center space-x-2 disabled:opacity-50"
-                    >
-                      {implementationLoading ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          <span>Implementing...</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>🚀 Implement Recommendations</span>
-                        </>
-                      )}
-                    </button>
+                  {(llmInsights.implementableActions && llmInsights.implementableActions.length > 0) || true && (
+                    <div className="flex flex-col space-y-2">
+                      {/* Debug Info */}
+                      <div className="text-xs text-gray-500">
+                        Debug: {llmInsights.implementableActions ? `${llmInsights.implementableActions.length} actions available` : 'No implementableActions found'}
+                      </div>
+                      
+                      <button
+                        onClick={implementRecommendations}
+                        disabled={implementationLoading || (!llmInsights.implementableActions || llmInsights.implementableActions.length === 0)}
+                        className="btn-primary flex items-center space-x-2 disabled:opacity-50"
+                      >
+                        {implementationLoading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            <span>Implementing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>🚀 Implement Recommendations</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   )}
                 </div>
 

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Package, Truck, AlertTriangle, CheckCircle, Plus, Trash2 } from 'lucide-react';
 import axios from 'axios';
+import CytoscapeComponent from 'react-cytoscapejs';
+import { useEffect } from 'react';
 
 function App() {
   const [orderLines, setOrderLines] = useState([
@@ -25,6 +27,33 @@ function App() {
   const [originalOrderLines, setOriginalOrderLines] = useState([]);
   const [implementationLoading, setImplementationLoading] = useState(false);
   const [implementationLog, setImplementationLog] = useState([]);
+  const [graphElements, setGraphElements] = useState([]);
+  const [graphLoading, setGraphLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchGraph = async () => {
+      setGraphLoading(true);
+      try {
+        const [nodesRes, edgesRes] = await Promise.all([
+          axios.get('http://localhost:8000/nodes'),
+          axios.get('http://localhost:8000/edges'),
+        ]);
+        const nodes = nodesRes.data.map(node => ({
+          data: { id: node.id, label: node.type, ...node.properties, type: node.type },
+          classes: node.type.toLowerCase(),
+        }));
+        const edges = edgesRes.data.map(edge => ({
+          data: { source: edge.source, target: edge.target, label: edge.type, ...edge.properties, type: edge.type },
+          classes: edge.type.toLowerCase(),
+        }));
+        setGraphElements([...nodes, ...edges]);
+      } catch (err) {
+        setGraphElements([]);
+      }
+      setGraphLoading(false);
+    };
+    fetchGraph();
+  }, []);
 
   const addOrderLine = () => {
     const newId = Math.max(...orderLines.map(ol => ol.id), 0) + 1;
@@ -248,6 +277,60 @@ function App() {
         </div>
       </header>
 
+      {/* --- Supply Chain Graph Visualization --- */}
+      <div style={{ height: '500px', marginBottom: 32, background: '#f8fafc', borderRadius: 8, border: '1px solid #e5e7eb', padding: 8 }}>
+        <h2 style={{ margin: 0, padding: 8, fontWeight: 600 }}>Supply Chain Digital Twin Graph</h2>
+        {graphLoading ? (
+          <div>Loading graph...</div>
+        ) : (
+          <CytoscapeComponent
+            elements={graphElements}
+            style={{ width: '100%', height: '440px' }}
+            layout={{ name: 'cose', animate: true }}
+            stylesheet={[
+              {
+                selector: 'node',
+                style: {
+                  label: 'data(label)',
+                  'background-color': '#60a5fa',
+                  'text-valign': 'center',
+                  'color': '#222',
+                  'font-size': 10,
+                  'width': 30,
+                  'height': 30,
+                },
+              },
+              {
+                selector: 'edge',
+                style: {
+                  width: 2,
+                  'line-color': '#a3a3a3',
+                  'target-arrow-color': '#a3a3a3',
+                  'target-arrow-shape': 'triangle',
+                  'curve-style': 'bezier',
+                  label: 'data(label)',
+                  'font-size': 8,
+                  'text-background-color': '#fff',
+                  'text-background-opacity': 1,
+                  'text-background-padding': 2,
+                },
+              },
+              // Color by type
+              { selector: '.distributioncenter', style: { 'background-color': '#f59e42' } },
+              { selector: '.store', style: { 'background-color': '#34d399' } },
+              { selector: '.sku', style: { 'background-color': '#818cf8' } },
+              { selector: '.truck', style: { 'background-color': '#f87171' } },
+              { selector: '.purchaseorder', style: { 'background-color': '#fbbf24' } },
+              { selector: '.shipment', style: { 'background-color': '#38bdf8' } },
+              { selector: '.inventorysnapshot', style: { 'background-color': '#a3e635' } },
+              { selector: '.return', style: { 'background-color': '#f472b6' } },
+              { selector: '.weatheralert', style: { 'background-color': '#facc15' } },
+              { selector: '.event', style: { 'background-color': '#64748b' } },
+            ]}
+          />
+        )}
+      </div>
+      {/* --- Existing App Content Below --- */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Order Input Section */}

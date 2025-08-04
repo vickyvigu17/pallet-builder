@@ -29,6 +29,18 @@ function App() {
   const [implementationLog, setImplementationLog] = useState([]);
   const [graphElements, setGraphElements] = useState([]);
   const [graphLoading, setGraphLoading] = useState(false);
+  const [selectedElement, setSelectedElement] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    // Detect if device is mobile/tablet
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 900);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     const fetchGraph = async () => {
@@ -54,6 +66,67 @@ function App() {
     };
     fetchGraph();
   }, []);
+
+  // --- Cytoscape event handler ---
+  const cyCallback = (cy) => {
+    cy.on('tap', 'node', (evt) => {
+      setSelectedElement({ type: 'node', data: evt.target.data() });
+    });
+    cy.on('tap', 'edge', (evt) => {
+      setSelectedElement({ type: 'edge', data: evt.target.data() });
+    });
+    cy.on('tap', (evt) => {
+      if (evt.target === cy) setSelectedElement(null);
+    });
+  };
+
+  // --- Detail Panel ---
+  const renderDetailPanel = () => {
+    if (!selectedElement) return null;
+    const { type, data } = selectedElement;
+    return (
+      <div
+        style={{
+          position: isMobile ? 'fixed' : 'absolute',
+          bottom: isMobile ? 0 : 'auto',
+          right: isMobile ? 0 : 16,
+          left: isMobile ? 0 : 'auto',
+          top: isMobile ? 'auto' : 80,
+          width: isMobile ? '100%' : 340,
+          maxHeight: isMobile ? '40vh' : 400,
+          background: '#fff',
+          borderTopLeftRadius: isMobile ? 16 : 8,
+          borderTopRightRadius: isMobile ? 16 : 8,
+          borderRadius: isMobile ? 16 : 8,
+          boxShadow: '0 2px 16px rgba(0,0,0,0.12)',
+          zIndex: 100,
+          padding: 20,
+          overflowY: 'auto',
+          border: '1px solid #e5e7eb',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <strong style={{ fontSize: 18 }}>{type === 'node' ? data.label : data.label + ' (Edge)'}</strong>
+          <button onClick={() => setSelectedElement(null)} style={{ fontSize: 20, background: 'none', border: 'none', cursor: 'pointer' }}>&times;</button>
+        </div>
+        <div style={{ fontSize: 14 }}>
+          {Object.entries(data).map(([k, v]) => (
+            k !== 'label' && k !== 'id' && k !== 'source' && k !== 'target' && k !== 'type' ? (
+              <div key={k} style={{ marginBottom: 4 }}>
+                <span style={{ fontWeight: 500 }}>{k}:</span> {String(v)}
+              </div>
+            ) : null
+          ))}
+        </div>
+        {type === 'edge' && (
+          <div style={{ marginTop: 8, fontSize: 13, color: '#888' }}>
+            <div>From: <b>{data.source}</b></div>
+            <div>To: <b>{data.target}</b></div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const addOrderLine = () => {
     const newId = Math.max(...orderLines.map(ol => ol.id), 0) + 1;
@@ -278,7 +351,7 @@ function App() {
       </header>
 
       {/* --- Supply Chain Graph Visualization --- */}
-      <div style={{ height: '500px', marginBottom: 32, background: '#f8fafc', borderRadius: 8, border: '1px solid #e5e7eb', padding: 8 }}>
+      <div style={{ height: '500px', marginBottom: 32, background: '#f8fafc', borderRadius: 8, border: '1px solid #e5e7eb', padding: 8, position: 'relative' }}>
         <h2 style={{ margin: 0, padding: 8, fontWeight: 600 }}>Supply Chain Digital Twin Graph</h2>
         {graphLoading ? (
           <div>Loading graph...</div>
@@ -287,6 +360,7 @@ function App() {
             elements={graphElements}
             style={{ width: '100%', height: '440px' }}
             layout={{ name: 'cose', animate: true }}
+            cy={cyCallback}
             stylesheet={[
               {
                 selector: 'node',
@@ -329,6 +403,7 @@ function App() {
             ]}
           />
         )}
+        {renderDetailPanel()}
       </div>
       {/* --- Existing App Content Below --- */}
       <div className="max-w-7xl mx-auto px-4 py-8">

@@ -15,6 +15,45 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+.App {
+  text-align: left;
+  min-height: 100vh;
+  background-color: #f8fafc;
+}
+
+/* Graph container styles */
+.graph-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin: 16px;
+  padding: 16px;
+}
+
+/* Detail panel styles */
+.detail-panel {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 16px;
+  margin: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .graph-container {
+    margin: 8px;
+    padding: 8px;
+  }
+  
+  .detail-panel {
+    margin: 4px;
+    padding: 12px;
+  }
+}
 @layer components {
   .btn-primary {
     @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;

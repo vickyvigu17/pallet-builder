@@ -1,11 +1,21 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import networkx as nx
 import random
 from datetime import datetime, timedelta
 
-app = FastAPI()
+app = FastAPI(title="Supply Chain Digital Twin API", version="1.0.0")
+
+# Add CORS middleware for frontend integration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, restrict to your frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- Ontology Node Types and Properties ---
 NODE_TYPES = {
@@ -44,7 +54,8 @@ G = nx.MultiDiGraph()
 
 # --- Helper Functions for Sample Data ---
 def random_location():
-    cities = ["Cincinnati, OH", "Dallas, TX", "Atlanta, GA", "Denver, CO", "Chicago, IL", "Phoenix, AZ", "Seattle, WA", "Orlando, FL", "Nashville, TN", "Salt Lake City, UT"]
+    cities = ["Cincinnati, OH", "Dallas, TX", "Atlanta, GA", "Denver, CO", "Chicago, IL", 
+              "Phoenix, AZ", "Seattle, WA", "Orlando, FL", "Nashville, TN", "Salt Lake City, UT"]
     return random.choice(cities)
 
 def random_region():
@@ -230,52 +241,64 @@ def generate_sample_data():
     for store in stores:
         dc = random.choice(dcs)
         G.add_edge(dc["dc_id"], store["store_id"], type="SUPPLIES")
+    
     # DC SHIPS Truck
     for truck in trucks:
         dc = random.choice(dcs)
         G.add_edge(dc["dc_id"], truck["truck_id"], type="SHIPS")
+    
     # Truck CARRIES Shipment
     for shipment in shipments:
         truck = random.choice(trucks)
         G.add_edge(truck["truck_id"], shipment["shipment_id"], type="CARRIES")
+    
     # Shipment CONTAINS SKU
     for shipment in shipments:
         for _ in range(random.randint(2, 10)):
             sku = random.choice(skus)
             G.add_edge(shipment["shipment_id"], sku["sku_id"], type="CONTAINS")
+    
     # Shipment DELIVERS Store
     for shipment in shipments:
         store = random.choice(stores)
         G.add_edge(shipment["shipment_id"], store["store_id"], type="DELIVERS")
+    
     # Store ORDERS PurchaseOrder
     for po in pos:
         store = random.choice(stores)
         G.add_edge(store["store_id"], po["po_id"], type="ORDERS")
+    
     # PurchaseOrder INCLUDES SKU
     for po in pos:
         for _ in range(random.randint(1, 5)):
             sku = random.choice(skus)
             G.add_edge(po["po_id"], sku["sku_id"], type="INCLUDES")
+    
     # PurchaseOrder FULFILLED_BY Shipment
     for po in pos:
         shipment = random.choice(shipments)
         G.add_edge(po["po_id"], shipment["shipment_id"], type="FULFILLED_BY")
+    
     # Store HAS_INVENTORY InventorySnapshot
     for snap in inv_snaps:
         store_id = snap["store_id"]
         G.add_edge(store_id, snap["snapshot_id"], type="HAS_INVENTORY")
+    
     # Store PROCESSES Return
     for ret in returns:
         store = random.choice(stores)
         G.add_edge(store["store_id"], ret["return_id"], type="PROCESSES")
+    
     # WeatherAlert IMPACTS DC
     for alert in alerts:
         dc = random.choice(dcs)
         G.add_edge(alert["alert_id"], dc["dc_id"], type="IMPACTS")
+    
     # WeatherAlert IMPACTS Truck
     for alert in alerts:
         truck = random.choice(trucks)
         G.add_edge(alert["alert_id"], truck["truck_id"], type="IMPACTS")
+    
     # Event ASSOCIATED_WITH Truck or PO
     for event in events:
         if event["impacted_entity"].startswith("T"):
@@ -283,6 +306,7 @@ def generate_sample_data():
         else:
             G.add_edge(event["event_id"], event["impacted_entity"], type="ASSOCIATED_WITH")
 
+# Generate sample data on startup
 generate_sample_data()
 
 # --- API Models ---
@@ -298,12 +322,20 @@ class EdgeModel(BaseModel):
     properties: Optional[Dict[str, Any]] = None
 
 # --- API Endpoints ---
+@app.get("/")
+def read_root():
+    return {"message": "Supply Chain Digital Twin API", "version": "1.0.0"}
+
 @app.get("/nodes", response_model=List[NodeModel])
 def get_nodes(type: Optional[str] = None):
     nodes = []
     for node_id, data in G.nodes(data=True):
         if type is None or data.get("type") == type:
-            nodes.append(NodeModel(id=node_id, type=data.get("type"), properties={k: v for k, v in data.items() if k != "type"}))
+            nodes.append(NodeModel(
+                id=node_id, 
+                type=data.get("type"), 
+                properties={k: v for k, v in data.items() if k != "type"}
+            ))
     return nodes
 
 @app.get("/edges", response_model=List[EdgeModel])
@@ -311,7 +343,12 @@ def get_edges(type: Optional[str] = None):
     edges = []
     for u, v, data in G.edges(data=True):
         if type is None or data.get("type") == type:
-            edges.append(EdgeModel(source=u, target=v, type=data.get("type"), properties={k: v for k, v in data.items() if k != "type"}))
+            edges.append(EdgeModel(
+                source=u, 
+                target=v, 
+                type=data.get("type"), 
+                properties={k: v for k, v in data.items() if k != "type"}
+            ))
     return edges
 
 @app.get("/node/{node_id}", response_model=NodeModel)
@@ -319,7 +356,11 @@ def get_node(node_id: str):
     if node_id not in G:
         raise HTTPException(status_code=404, detail="Node not found")
     data = G.nodes[node_id]
-    return NodeModel(id=node_id, type=data.get("type"), properties={k: v for k, v in data.items() if k != "type"})
+    return NodeModel(
+        id=node_id, 
+        type=data.get("type"), 
+        properties={k: v for k, v in data.items() if k != "type"}
+    )
 
 @app.get("/neighbors/{node_id}", response_model=List[NodeModel])
 def get_neighbors(node_id: str):
@@ -328,5 +369,20 @@ def get_neighbors(node_id: str):
     neighbors = []
     for n in G.neighbors(node_id):
         data = G.nodes[n]
-        neighbors.append(NodeModel(id=n, type=data.get("type"), properties={k: v for k, v in data.items() if k != "type"}))
+        neighbors.append(NodeModel(
+            id=n, 
+            type=data.get("type"), 
+            properties={k: v for k, v in data.items() if k != "type"}
+        ))
     return neighbors
+
+@app.get("/stats")
+def get_stats():
+    return {
+        "total_nodes": G.number_of_nodes(),
+        "total_edges": G.number_of_edges(),
+        "node_types": {node_type: len([n for n, d in G.nodes(data=True) if d.get("type") == node_type]) 
+                      for node_type in set(d.get("type") for _, d in G.nodes(data=True))},
+        "edge_types": {edge_type: len([e for _, _, e in G.edges(data=True) if e.get("type") == edge_type]) 
+                      for edge_type in set(e.get("type") for _, _, e in G.edges(data=True))}
+    }

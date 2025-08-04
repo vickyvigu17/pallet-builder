@@ -1,36 +1,15 @@
-import React, { useState } from 'react';
-import { Package, Truck, AlertTriangle, CheckCircle, Plus, Trash2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Package, Truck, AlertTriangle, CheckCircle, Plus, Trash2, BarChart3, MapPin, Calendar, Activity } from 'lucide-react';
 import axios from 'axios';
 import CytoscapeComponent from 'react-cytoscapejs';
-import { useEffect } from 'react';
 
 function App() {
-  const [orderLines, setOrderLines] = useState([
-    {
-      id: 1,
-      sku: 'SKU001',
-      name: 'Cereal Boxes',
-      store: 'Store A',
-      quantity: 24,
-      weight: 0.5,
-      category: 'dry goods',
-      fragile: false,
-      height: 0.25,
-      unitsPerCase: 12,
-      casesPerLayer: 6
-    }
-  ]);
-  const [pallets, setPallets] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [summary, setSummary] = useState(null);
-  const [llmInsights, setLlmInsights] = useState(null);
-  const [originalOrderLines, setOriginalOrderLines] = useState([]);
-  const [implementationLoading, setImplementationLoading] = useState(false);
-  const [implementationLog, setImplementationLog] = useState([]);
   const [graphElements, setGraphElements] = useState([]);
   const [graphLoading, setGraphLoading] = useState(false);
   const [selectedElement, setSelectedElement] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [apiUrl, setApiUrl] = useState('http://localhost:8000');
 
   useEffect(() => {
     // Detect if device is mobile/tablet
@@ -46,26 +25,32 @@ function App() {
     const fetchGraph = async () => {
       setGraphLoading(true);
       try {
-        const [nodesRes, edgesRes] = await Promise.all([
-          axios.get('http://localhost:8000/nodes'),
-          axios.get('http://localhost:8000/edges'),
+        const [nodesRes, edgesRes, statsRes] = await Promise.all([
+          axios.get(`${apiUrl}/nodes`),
+          axios.get(`${apiUrl}/edges`),
+          axios.get(`${apiUrl}/stats`),
         ]);
+        
         const nodes = nodesRes.data.map(node => ({
           data: { id: node.id, label: node.type, ...node.properties, type: node.type },
           classes: node.type.toLowerCase(),
         }));
+        
         const edges = edgesRes.data.map(edge => ({
           data: { source: edge.source, target: edge.target, label: edge.type, ...edge.properties, type: edge.type },
           classes: edge.type.toLowerCase(),
         }));
+        
         setGraphElements([...nodes, ...edges]);
+        setStats(statsRes.data);
       } catch (err) {
+        console.error('Error fetching graph data:', err);
         setGraphElements([]);
       }
       setGraphLoading(false);
     };
     fetchGraph();
-  }, []);
+  }, [apiUrl]);
 
   // --- Cytoscape event handler ---
   const cyCallback = (cy) => {
@@ -84,6 +69,7 @@ function App() {
   const renderDetailPanel = () => {
     if (!selectedElement) return null;
     const { type, data } = selectedElement;
+    
     return (
       <div
         style={{
@@ -105,261 +91,191 @@ function App() {
           border: '1px solid #e5e7eb',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <strong style={{ fontSize: 18 }}>{type === 'node' ? data.label : data.label + ' (Edge)'}</strong>
-          <button onClick={() => setSelectedElement(null)} style={{ fontSize: 20, background: 'none', border: 'none', cursor: 'pointer' }}>&times;</button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <strong style={{ fontSize: 18, color: '#1f2937' }}>
+            {type === 'node' ? data.label : data.label + ' (Edge)'}
+          </strong>
+          <button 
+            onClick={() => setSelectedElement(null)} 
+            style={{ 
+              fontSize: 20, 
+              background: 'none', 
+              border: 'none', 
+              cursor: 'pointer',
+              color: '#6b7280',
+              padding: '4px'
+            }}
+          >
+            ×
+          </button>
         </div>
-        <div style={{ fontSize: 14 }}>
+        
+        <div style={{ fontSize: 14, color: '#374151' }}>
           {Object.entries(data).map(([k, v]) => (
             k !== 'label' && k !== 'id' && k !== 'source' && k !== 'target' && k !== 'type' ? (
-              <div key={k} style={{ marginBottom: 4 }}>
-                <span style={{ fontWeight: 500 }}>{k}:</span> {String(v)}
+              <div key={k} style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: 500, color: '#6b7280' }}>{k}:</span> 
+                <span style={{ color: '#1f2937' }}>{String(v)}</span>
               </div>
             ) : null
           ))}
         </div>
+        
         {type === 'edge' && (
-          <div style={{ marginTop: 8, fontSize: 13, color: '#888' }}>
-            <div>From: <b>{data.source}</b></div>
-            <div>To: <b>{data.target}</b></div>
+          <div style={{ marginTop: 12, fontSize: 13, color: '#6b7280', padding: '8px', background: '#f3f4f6', borderRadius: '4px' }}>
+            <div style={{ marginBottom: 4 }}>From: <b style={{ color: '#1f2937' }}>{data.source}</b></div>
+            <div>To: <b style={{ color: '#1f2937' }}>{data.target}</b></div>
           </div>
         )}
       </div>
     );
   };
 
-  const addOrderLine = () => {
-    const newId = Math.max(...orderLines.map(ol => ol.id), 0) + 1;
-    setOrderLines([...orderLines, {
-      id: newId,
-      sku: '',
-      name: '',
-      store: '',
-      quantity: 1,
-      weight: 1,
-      category: 'dry goods',
-      fragile: false,
-      height: 0.3,
-      unitsPerCase: 1,
-      casesPerLayer: 1
-    }]);
-  };
-
-  const removeOrderLine = (id) => {
-    setOrderLines(orderLines.filter(ol => ol.id !== id));
-  };
-
-  const updateOrderLine = (id, field, value) => {
-    setOrderLines(orderLines.map(ol => 
-      ol.id === id 
-        ? { ...ol, [field]: field === 'quantity' || field === 'weight' || field === 'height' || field === 'unitsPerCase' || field === 'casesPerLayer' ? Number(value) : value }
-        : ol
-    ));
-  };
-
-  const buildPallets = async (e) => {
-    if (e) e.preventDefault();
-    setLoading(true);
+  // --- Stats Panel ---
+  const renderStats = () => {
+    if (!stats) return null;
     
-    // Clean and validate order lines
-    const validOrderLines = orderLines
-      .filter(ol => ol.sku && ol.name && ol.store)
-      .map(ol => ({
-        ...ol,
-        unitsPerCase: ol.unitsPerCase || 1,
-        casesPerLayer: ol.casesPerLayer || 1,
-        quantity: ol.quantity || 1,
-        weight: ol.weight || 1,
-        height: ol.height || 0.3
-      }));
-    
-    // Store original order lines for implementation
-    setOriginalOrderLines(validOrderLines);
-    
-    console.log('Valid order lines:', validOrderLines);
-    
-    try {
-      const response = await axios.post('/api/build-pallets', {
-        orderLines: validOrderLines
-      });
-      
-      console.log('API Response:', response.data);
-      console.log('LLM Insights:', response.data.llmInsights);
-      console.log('Implementable Actions:', response.data.llmInsights?.implementableActions);
-      setPallets(response.data.pallets);
-      setLlmInsights(response.data.llmInsights);
-      setImplementationLog([]); // Clear previous implementation log
-      
-      // Calculate summary from pallets
-      const storeSet = {};
-      for (let i = 0; i < response.data.pallets.length; i++) {
-        storeSet[response.data.pallets[i].store] = true;
-      }
-      const uniqueStores = Object.keys(storeSet).length;
-      
-      let totalWeight = 0;
-      for (let i = 0; i < response.data.pallets.length; i++) {
-        totalWeight += response.data.pallets[i].totalWeight;
-      }
-      
-      setSummary({
-        totalPallets: response.data.pallets.length,
-        stores: uniqueStores,
-        totalWeight: totalWeight
-      });
-    } catch (error) {
-      console.error('Error building pallets:', error);
-      console.error('Error details:', error.response?.data);
-      alert('Error building pallets. Please check console for details.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const implementRecommendations = async () => {
-    if (!llmInsights?.implementableActions || llmInsights.implementableActions.length === 0) {
-      alert('No implementable recommendations available.');
-      return;
-    }
-
-    setImplementationLoading(true);
-    
-    try {
-      const response = await axios.post('/api/implement-recommendations', {
-        pallets: pallets,
-        orderLines: originalOrderLines,
-        implementableActions: llmInsights.implementableActions
-      });
-
-      console.log('Implementation Response:', response.data);
-      
-      if (response.data.success) {
-        // Update pallets with optimized version
-        setPallets(response.data.optimizedPallets);
-        setLlmInsights(response.data.newLlmInsights);
-        setImplementationLog(response.data.implementationLog);
+    return (
+      <div style={{ 
+        background: 'white', 
+        borderRadius: 8, 
+        padding: 16, 
+        margin: '16px', 
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        display: 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: 16
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <BarChart3 size={24} color="#3b82f6" />
+          <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1f2937' }}>{stats.total_nodes}</div>
+          <div style={{ fontSize: 14, color: '#6b7280' }}>Total Nodes</div>
+        </div>
         
-        // Update summary
-        const storeSet = {};
-        for (let i = 0; i < response.data.optimizedPallets.length; i++) {
-          storeSet[response.data.optimizedPallets[i].store] = true;
-        }
-        const uniqueStores = Object.keys(storeSet).length;
+        <div style={{ textAlign: 'center' }}>
+          <Activity size={24} color="#10b981" />
+          <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1f2937' }}>{stats.total_edges}</div>
+          <div style={{ fontSize: 14, color: '#6b7280' }}>Total Edges</div>
+        </div>
         
-        let totalWeight = 0;
-        for (let i = 0; i < response.data.optimizedPallets.length; i++) {
-          totalWeight += response.data.optimizedPallets[i].totalWeight;
-        }
+        <div style={{ textAlign: 'center' }}>
+          <Package size={24} color="#f59e0b" />
+          <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1f2937' }}>
+            {Object.keys(stats.node_types || {}).length}
+          </div>
+          <div style={{ fontSize: 14, color: '#6b7280' }}>Node Types</div>
+        </div>
         
-        setSummary({
-          totalPallets: response.data.optimizedPallets.length,
-          stores: uniqueStores,
-          totalWeight: totalWeight
-        });
-
-        alert(`✅ Recommendations implemented successfully!\n\nPallet reduction: ${response.data.savings.originalCount} → ${response.data.savings.optimizedCount} pallets\nSavings: ${response.data.savings.palletReduction} pallets`);
-      }
-    } catch (error) {
-      console.error('Error implementing recommendations:', error);
-      alert('Error implementing recommendations. Please try again.');
-    } finally {
-      setImplementationLoading(false);
-    }
-  };
-
-  const loadSampleData = () => {
-    setOrderLines([
-      {
-        id: 1,
-        sku: 'SKU001',
-        name: 'Cereal Boxes',
-        store: 'Store A',
-        quantity: 48,
-        weight: 0.5,
-        category: 'dry goods',
-        fragile: false,
-        height: 0.25,
-        unitsPerCase: 12,
-        casesPerLayer: 8
-      },
-      {
-        id: 2,
-        sku: 'SKU002',
-        name: 'Frozen Pizza',
-        store: 'Store A',
-        quantity: 30,
-        weight: 1.2,
-        category: 'frozen',
-        fragile: false,
-        height: 0.05,
-        unitsPerCase: 6,
-        casesPerLayer: 4
-      },
-      {
-        id: 3,
-        sku: 'SKU003',
-        name: 'Glass Bottles',
-        store: 'Store B',
-        quantity: 24,
-        weight: 2.0,
-        category: 'bottles',
-        fragile: true,
-        height: 0.3,
-        unitsPerCase: 24,
-        casesPerLayer: 3
-      },
-      {
-        id: 4,
-        sku: 'SKU004',
-        name: 'Canned Goods',
-        store: 'Store A',
-        quantity: 60,
-        weight: 0.8,
-        category: 'dry goods',
-        fragile: false,
-        height: 0.15,
-        unitsPerCase: 24,
-        casesPerLayer: 6
-      },
-      {
-        id: 5,
-        sku: 'SKU005',
-        name: 'Ice Cream',
-        store: 'Store B',
-        quantity: 20,
-        weight: 1.5,
-        category: 'frozen',
-        fragile: false,
-        height: 0.12,
-        unitsPerCase: 4,
-        casesPerLayer: 5
-      }
-    ]);
+        <div style={{ textAlign: 'center' }}>
+          <Truck size={24} color="#ef4444" />
+          <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1f2937' }}>
+            {Object.keys(stats.edge_types || {}).length}
+          </div>
+          <div style={{ fontSize: 14, color: '#6b7280' }}>Edge Types</div>
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className="min-h-screen bg-warehouse-50">
+    <div className="App" style={{ position: 'relative' }}>
       {/* Header */}
-      <header className="bg-warehouse-900 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center space-x-3">
-            <Package className="h-8 w-8 text-primary-400" />
-            <h1 className="text-3xl font-bold">Pallet Builder</h1>
-            <span className="text-warehouse-400">Distribution Center Optimization</span>
-          </div>
-        </div>
+      <header style={{ 
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
+        color: 'white', 
+        padding: '20px',
+        textAlign: 'center'
+      }}>
+        <h1 style={{ margin: 0, fontSize: isMobile ? '24px' : '32px', fontWeight: 600 }}>
+          🏭 Supply Chain Digital Twin
+        </h1>
+        <p style={{ margin: '8px 0 0 0', opacity: 0.9, fontSize: isMobile ? '14px' : '16px' }}>
+          Ontology-based graph model for retail supply chain management
+        </p>
       </header>
 
-      {/* --- Supply Chain Graph Visualization --- */}
-      <div style={{ height: '500px', marginBottom: 32, background: '#f8fafc', borderRadius: 8, border: '1px solid #e5e7eb', padding: 8, position: 'relative' }}>
-        <h2 style={{ margin: 0, padding: 8, fontWeight: 600 }}>Supply Chain Digital Twin Graph</h2>
+      {/* API URL Input */}
+      <div style={{ 
+        background: 'white', 
+        padding: '12px 16px', 
+        borderBottom: '1px solid #e5e7eb',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8
+      }}>
+        <label style={{ fontSize: 14, fontWeight: 500, color: '#374151' }}>API URL:</label>
+        <input
+          type="text"
+          value={apiUrl}
+          onChange={(e) => setApiUrl(e.target.value)}
+          style={{
+            flex: 1,
+            padding: '8px 12px',
+            border: '1px solid #d1d5db',
+            borderRadius: '4px',
+            fontSize: '14px'
+          }}
+          placeholder="http://localhost:8000"
+        />
+        <button
+          onClick={() => window.location.reload()}
+          style={{
+            padding: '8px 16px',
+            background: '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '14px'
+          }}
+        >
+          Refresh
+        </button>
+      </div>
+
+      {/* Stats Panel */}
+      {renderStats()}
+
+      {/* Graph Visualization */}
+      <div style={{ 
+        height: isMobile ? '400px' : '500px', 
+        margin: '16px', 
+        background: '#f8fafc', 
+        borderRadius: 8, 
+        border: '1px solid #e5e7eb', 
+        padding: 8, 
+        position: 'relative' 
+      }}>
+        <h2 style={{ 
+          margin: 0, 
+          padding: '8px 16px', 
+          fontWeight: 600, 
+          color: '#1f2937',
+          fontSize: isMobile ? '18px' : '20px'
+        }}>
+          Supply Chain Graph Visualization
+        </h2>
+        
         {graphLoading ? (
-          <div>Loading graph...</div>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            height: 'calc(100% - 60px)',
+            color: '#6b7280'
+          }}>
+            Loading supply chain data...
+          </div>
         ) : (
           <CytoscapeComponent
             elements={graphElements}
-            style={{ width: '100%', height: '440px' }}
-            layout={{ name: 'cose', animate: true }}
+            style={{ width: '100%', height: 'calc(100% - 60px)' }}
+            layout={{ 
+              name: 'cose', 
+              animate: true,
+              nodeDimensionsIncludeLabels: true,
+              fit: true
+            }}
             cy={cyCallback}
             stylesheet={[
               {
@@ -368,385 +284,86 @@ function App() {
                   label: 'data(label)',
                   'background-color': '#60a5fa',
                   'text-valign': 'center',
-                  'color': '#222',
+                  'text-halign': 'center',
+                  'color': '#1f2937',
                   'font-size': 10,
-                  'width': 30,
-                  'height': 30,
+                  'font-weight': 'bold',
+                  'width': 35,
+                  'height': 35,
+                  'border-width': 2,
+                  'border-color': '#ffffff',
+                  'text-background-color': '#ffffff',
+                  'text-background-opacity': 0.8,
+                  'text-background-padding': 3,
                 },
               },
               {
                 selector: 'edge',
                 style: {
                   width: 2,
-                  'line-color': '#a3a3a3',
-                  'target-arrow-color': '#a3a3a3',
+                  'line-color': '#9ca3af',
+                  'target-arrow-color': '#9ca3af',
                   'target-arrow-shape': 'triangle',
                   'curve-style': 'bezier',
                   label: 'data(label)',
                   'font-size': 8,
-                  'text-background-color': '#fff',
-                  'text-background-opacity': 1,
+                  'text-background-color': '#ffffff',
+                  'text-background-opacity': 0.9,
                   'text-background-padding': 2,
+                  'text-rotation': 'autorotate',
                 },
               },
               // Color by type
-              { selector: '.distributioncenter', style: { 'background-color': '#f59e42' } },
-              { selector: '.store', style: { 'background-color': '#34d399' } },
-              { selector: '.sku', style: { 'background-color': '#818cf8' } },
-              { selector: '.truck', style: { 'background-color': '#f87171' } },
-              { selector: '.purchaseorder', style: { 'background-color': '#fbbf24' } },
-              { selector: '.shipment', style: { 'background-color': '#38bdf8' } },
-              { selector: '.inventorysnapshot', style: { 'background-color': '#a3e635' } },
-              { selector: '.return', style: { 'background-color': '#f472b6' } },
-              { selector: '.weatheralert', style: { 'background-color': '#facc15' } },
+              { selector: '.distributioncenter', style: { 'background-color': '#f59e0b' } },
+              { selector: '.store', style: { 'background-color': '#10b981' } },
+              { selector: '.sku', style: { 'background-color': '#8b5cf6' } },
+              { selector: '.truck', style: { 'background-color': '#ef4444' } },
+              { selector: '.purchaseorder', style: { 'background-color': '#f59e0b' } },
+              { selector: '.shipment', style: { 'background-color': '#06b6d4' } },
+              { selector: '.inventorysnapshot', style: { 'background-color': '#84cc16' } },
+              { selector: '.return', style: { 'background-color': '#ec4899' } },
+              { selector: '.weatheralert', style: { 'background-color': '#fbbf24' } },
               { selector: '.event', style: { 'background-color': '#64748b' } },
             ]}
           />
         )}
         {renderDetailPanel()}
       </div>
-      {/* --- Existing App Content Below --- */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Order Input Section */}
-          <div className="space-y-6">
-            <div className="card">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-warehouse-900">Order Lines</h2>
-                <div className="space-x-2">
-                  <button onClick={loadSampleData} className="btn-secondary text-sm">
-                    Load Sample
-                  </button>
-                  <button onClick={addOrderLine} className="btn-primary">
-                    <Plus className="h-4 w-4 inline mr-1" />
-                    Add Item
-                  </button>
-                </div>
-              </div>
-              
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {orderLines.map((orderLine) => (
-                  <div key={orderLine.id} className="border border-warehouse-200 rounded-lg p-4 bg-warehouse-50">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-warehouse-700 mb-1">SKU</label>
-                        <input
-                          type="text"
-                          value={orderLine.sku}
-                          onChange={(e) => updateOrderLine(orderLine.id, 'sku', e.target.value)}
-                          className="input-field"
-                          placeholder="SKU001"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-warehouse-700 mb-1">Product Name</label>
-                        <input
-                          type="text"
-                          value={orderLine.name}
-                          onChange={(e) => updateOrderLine(orderLine.id, 'name', e.target.value)}
-                          className="input-field"
-                          placeholder="Product name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-warehouse-700 mb-1">Store</label>
-                        <input
-                          type="text"
-                          value={orderLine.store}
-                          onChange={(e) => updateOrderLine(orderLine.id, 'store', e.target.value)}
-                          className="input-field"
-                          placeholder="Store A"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-warehouse-700 mb-1">Quantity</label>
-                        <input
-                          type="number"
-                          value={orderLine.quantity}
-                          onChange={(e) => updateOrderLine(orderLine.id, 'quantity', e.target.value)}
-                          className="input-field"
-                          min="1"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-warehouse-700 mb-1">Weight (kg)</label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={orderLine.weight}
-                          onChange={(e) => updateOrderLine(orderLine.id, 'weight', e.target.value)}
-                          className="input-field"
-                          min="0.1"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-warehouse-700 mb-1">Items per Case</label>
-                        <input
-                          type="number"
-                          value={orderLine.unitsPerCase}
-                          onChange={(e) => updateOrderLine(orderLine.id, 'unitsPerCase', e.target.value)}
-                          className="input-field"
-                          min="1"
-                          placeholder="e.g., 12"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-warehouse-700 mb-1">Cases per Layer</label>
-                        <input
-                          type="number"
-                          value={orderLine.casesPerLayer}
-                          onChange={(e) => updateOrderLine(orderLine.id, 'casesPerLayer', e.target.value)}
-                          className="input-field"
-                          min="1"
-                          placeholder="e.g., 6"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-warehouse-700 mb-1">Category</label>
-                        <select
-                          value={orderLine.category}
-                          onChange={(e) => updateOrderLine(orderLine.id, 'category', e.target.value)}
-                          className="input-field"
-                        >
-                          <option value="dry goods">Dry Goods</option>
-                          <option value="frozen">Frozen</option>
-                          <option value="bottles">Bottles</option>
-                          <option value="fragile">Fragile</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between">
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={orderLine.fragile}
-                          onChange={(e) => updateOrderLine(orderLine.id, 'fragile', e.target.checked)}
-                          className="mr-2"
-                        />
-                        <span className="text-sm text-warehouse-700">Fragile</span>
-                      </label>
-                      <button
-                        onClick={() => removeOrderLine(orderLine.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              <div className="mt-6">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    buildPallets(e);
-                  }}
-                  disabled={loading || orderLines.length === 0}
-                  className="btn-primary w-full py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Building Pallets...' : 'Build Pallets'}
-                  <Truck className="h-5 w-5 inline ml-2" />
-                </button>
-              </div>
-            </div>
+
+      {/* Legend */}
+      <div style={{ 
+        background: 'white', 
+        margin: '16px', 
+        padding: '16px', 
+        borderRadius: 8, 
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      }}>
+        <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#1f2937' }}>Node Types</h3>
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', 
+          gap: '8px',
+          fontSize: '12px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: 12, height: 12, backgroundColor: '#f59e0b', borderRadius: '50%' }}></div>
+            <span>Distribution Center</span>
           </div>
-
-          {/* Pallet Results Section */}
-          <div className="space-y-6">
-            {/* LLM Insights Section */}
-            {llmInsights && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-warehouse-900 flex items-center">
-                    🤖 AI Optimization Insights
-                  </h3>
-                  {(llmInsights.implementableActions && llmInsights.implementableActions.length > 0) || true && (
-                    <div className="flex flex-col space-y-2">
-                      {/* Debug Info */}
-                      <div className="text-xs text-gray-500">
-                        Debug: {llmInsights.implementableActions ? `${llmInsights.implementableActions.length} actions available` : 'No implementableActions found'}
-                      </div>
-                      
-                      <button
-                        onClick={implementRecommendations}
-                        disabled={implementationLoading || (!llmInsights.implementableActions || llmInsights.implementableActions.length === 0)}
-                        className="btn-primary flex items-center space-x-2 disabled:opacity-50"
-                      >
-                        {implementationLoading ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            <span>Implementing...</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>🚀 Implement Recommendations</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Implementation Log */}
-                {implementationLog && implementationLog.length > 0 && (
-                  <div className="card bg-green-50 border-green-200">
-                    <h4 className="font-semibold text-green-800 mb-2">🎯 Implementation Results</h4>
-                    <div className="space-y-1">
-                      {implementationLog.map((log, idx) => (
-                        <div key={idx} className="text-green-700 text-sm">• {log}</div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Cost Savings */}
-                <div className="card bg-green-50 border-green-200">
-                  <h4 className="font-semibold text-green-800 mb-2">💰 Cost Analysis</h4>
-                  <p className="text-green-700">{llmInsights.costSavings}</p>
-                </div>
-
-                {/* Safety Warnings */}
-                {llmInsights.safetyWarnings && llmInsights.safetyWarnings.length > 0 && (
-                  <div className="card bg-red-50 border-red-200">
-                    <h4 className="font-semibold text-red-800 mb-2">⚠️ Safety Warnings</h4>
-                    <div className="space-y-1">
-                      {llmInsights.safetyWarnings.map((warning, idx) => (
-                        <div key={idx} className="text-red-700 text-sm">• {warning}</div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Loose Item Strategy */}
-                {llmInsights.looseItemStrategy && (
-                  <div className="card bg-blue-50 border-blue-200">
-                    <h4 className="font-semibold text-blue-800 mb-2">📦 Loose Item Management</h4>
-                    <p className="text-blue-700 text-sm">{llmInsights.looseItemStrategy}</p>
-                  </div>
-                )}
-
-                {/* Recommendations */}
-                {llmInsights.recommendations && llmInsights.recommendations.length > 0 && (
-                  <div className="card bg-yellow-50 border-yellow-200">
-                    <h4 className="font-semibold text-yellow-800 mb-2">💡 AI Recommendations</h4>
-                    <div className="space-y-1">
-                      {llmInsights.recommendations.map((rec, idx) => (
-                        <div key={idx} className="text-yellow-700 text-sm">• {rec}</div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Detailed Analysis */}
-                {llmInsights.analysis && (
-                  <div className="card">
-                    <h4 className="font-semibold text-warehouse-900 mb-2">📊 Detailed Analysis</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div className="text-center">
-                        <div className="text-xl font-bold text-primary-600">{llmInsights.analysis.totalPallets}</div>
-                        <div className="text-warehouse-600">Total Pallets</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-xl font-bold text-primary-600">{llmInsights.analysis.averageUtilization?.toFixed(1)}%</div>
-                        <div className="text-warehouse-600">Avg Utilization</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-xl font-bold text-primary-600">{llmInsights.analysis.looseItems?.length || 0}</div>
-                        <div className="text-warehouse-600">Loose Items</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-xl font-bold text-primary-600">{llmInsights.analysis.fragileItems?.length || 0}</div>
-                        <div className="text-warehouse-600">Fragile Items</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {summary && (
-              <div className="card">
-                <h3 className="text-lg font-semibold text-warehouse-900 mb-3">Summary</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-primary-600">{summary.totalPallets}</div>
-                    <div className="text-sm text-warehouse-600">Total Pallets</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-primary-600">{summary.stores}</div>
-                    <div className="text-sm text-warehouse-600">Stores</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-primary-600">{Math.round(summary.totalWeight)}kg</div>
-                    <div className="text-sm text-warehouse-600">Total Weight</div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {pallets.length > 0 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-warehouse-900">Generated Pallets</h3>
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {pallets.map((pallet, index) => (
-                    <div key={pallet.id || pallet.palletId || index} className="card">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-semibold text-warehouse-900">
-                          Pallet #{index + 1} - {pallet.store || 'Unknown Store'}
-                        </h4>
-                        <div className="flex items-center space-x-2">
-                          {pallet.type === 'frozen' && (
-                            <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                              Frozen
-                            </span>
-                          )}
-                          <span className="text-sm text-warehouse-600">
-                            {Math.round(pallet.totalWeight || 0)}kg
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        {(pallet.items || []).map((item, itemIndex) => (
-                          <div key={itemIndex} className="flex items-center justify-between py-2 border-b border-warehouse-100 last:border-b-0">
-                            <div className="flex items-center space-x-2">
-                              {item.fragile && <AlertTriangle className="h-4 w-4 text-yellow-500" />}
-                              <span className="text-sm font-medium">{item.name || item.sku}</span>
-                              <span className="text-xs text-warehouse-500">({item.sku})</span>
-                            </div>
-                            <div className="text-sm text-warehouse-600">
-                              {item.quantity} × {Math.round((item.weight || 0) / (item.quantity || 1) * 10) / 10}kg
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      
-                      {(pallet.specialInstructions || pallet.instructions || []).length > 0 && (
-                        <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
-                          <div className="flex items-center space-x-1 mb-1">
-                            <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                            <span className="text-sm font-medium text-yellow-800">Special Instructions:</span>
-                          </div>
-                          {(pallet.specialInstructions || pallet.instructions || []).map((instruction, idx) => (
-                            <div key={idx} className="text-sm text-yellow-700">• {instruction}</div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {pallets.length === 0 && !loading && (
-              <div className="card text-center py-12">
-                <Package className="h-16 w-16 text-warehouse-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-warehouse-600 mb-2">No Pallets Generated</h3>
-                <p className="text-warehouse-500">Add order lines and click "Build Pallets" to get started.</p>
-              </div>
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: 12, height: 12, backgroundColor: '#10b981', borderRadius: '50%' }}></div>
+            <span>Store</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: 12, height: 12, backgroundColor: '#8b5cf6', borderRadius: '50%' }}></div>
+            <span>SKU</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: 12, height: 12, backgroundColor: '#ef4444', borderRadius: '50%' }}></div>
+            <span>Truck</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: 12, height: 12, backgroundColor: '#06b6d4', borderRadius: '50%' }}></div>
+            <span>Shipment</span>
           </div>
         </div>
       </div>

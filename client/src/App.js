@@ -9,7 +9,7 @@ function App() {
   const [selectedElement, setSelectedElement] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const [stats, setStats] = useState(null);
-  const [apiUrl, setApiUrl] = useState('http://localhost:8000');
+  const [apiUrl, setApiUrl] = useState(process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
   useEffect(() => {
     // Detect if device is mobile/tablet

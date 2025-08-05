@@ -13,14 +13,16 @@ function App() {
   const [selectedTruck, setSelectedTruck] = useState("");
   const [highlight, setHighlight] = useState(null);
 
-  // Use your deployed backend URL or environment variable
-  const apiUrl = process.env.REACT_APP_API_URL || "";
+  // Use environment variable or default to current domain for single-service deployment
+  const apiUrl = process.env.REACT_APP_API_URL || window.location.origin;
 
   useEffect(() => {
     const fetchNodes = async () => {
       setLoading(true);
       try {
+        console.log("Fetching from:", `${apiUrl}/api/nodes`);
         const res = await axios.get(`${apiUrl}/api/nodes`);
+        console.log("API response:", res.data.length, "nodes received");
         setDcs(res.data.filter(n => n.type === "DistributionCenter"));
         setStores(res.data.filter(n => n.type === "Store"));
         setTrucks(res.data.filter(n => n.type === "Truck"));
@@ -28,6 +30,7 @@ function App() {
         setShipments(res.data.filter(n => n.type === "Shipment"));
       } catch (err) {
         console.error("Error fetching data:", err);
+        console.error("API URL used:", apiUrl);
         setDcs([]);
         setStores([]);
         setTrucks([]);

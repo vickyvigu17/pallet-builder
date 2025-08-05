@@ -398,6 +398,8 @@ def get_stats():
 async def serve_frontend_catch_all(full_path: str):
     if full_path.startswith("api/"):
         raise HTTPException(status_code=404, detail="API endpoint not found")
+    if full_path.startswith("debug/"):
+        raise HTTPException(status_code=404, detail="Debug endpoint not found")
     try:
         return FileResponse("static/index.html")
     except Exception as e:

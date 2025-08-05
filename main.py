@@ -9,6 +9,7 @@ import random
 from datetime import datetime, timedelta
 import os
 
+# Updated for Render deployment - v1.1
 app = FastAPI(title="Supply Chain Digital Twin API", version="1.0.0")
 
 # CORS middleware

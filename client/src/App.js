@@ -26,9 +26,9 @@ function App() {
       setGraphLoading(true);
       try {
         const [nodesRes, edgesRes, statsRes] = await Promise.all([
-          axios.get(`${apiUrl}/nodes`),
-          axios.get(`${apiUrl}/edges`),
-          axios.get(`${apiUrl}/stats`),
+          axios.get(`${apiUrl}/api/nodes`),
+          axios.get(`${apiUrl}/api/edges`),
+          axios.get(`${apiUrl}/api/stats`),
         ]);
         
         const nodes = nodesRes.data.map(node => ({

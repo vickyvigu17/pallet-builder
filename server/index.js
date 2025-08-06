@@ -7,7 +7,12 @@ const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+app.listen(PORT, '0.0.0.0', function() {
+  console.log(`🚀 Pallet Builder server running on port ${PORT}`);
+  console.log(`📊 Server started successfully`);
+  console.log(`🤖 LLM-powered optimization enabled`);
+});
+
 
 // Middleware
 app.use(helmet({

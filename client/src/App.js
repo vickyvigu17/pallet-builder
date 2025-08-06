@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Package, Truck, AlertTriangle, CheckCircle, Plus, Trash2 } from 'lucide-react';
+import { Package, Truck, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import axios from 'axios';
 
 function App() {

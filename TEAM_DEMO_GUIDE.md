@@ -14,7 +14,7 @@ This repository contains **TWO COMPLETE APPLICATIONS** on different branches:
 ---
 
 ## 🤖 **Application 1: Intelligent Pallet Builder** 
-**(Currently on: `cursor/analyze-pallet-suggestion-algorithm-logic-3c7e` branch)**
+**(Currently on: `cursor/analyze-pallet-suggestion-algorithm-logic-3c7e` branchs)**
 
 ### **🎯 Core Features:**
 

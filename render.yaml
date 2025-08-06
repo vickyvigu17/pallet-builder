@@ -2,10 +2,28 @@ services:
   - type: web
     name: pallet-builder-app
     env: node
-    plan: free
-    buildCommand: npm install && cd client && npm install && npm run build && cd .. && cp -r client/build/* public/
+    buildCommand: |
+      echo "=== STARTING BUILD PROCESS ==="
+      rm -rf node_modules client/node_modules public/*
+      echo "=== INSTALLING SERVER DEPENDENCIES ==="
+      npm install
+      echo "=== INSTALLING CLIENT DEPENDENCIES ==="
+      cd client && npm install
+      echo "=== BUILDING REACT APP ==="
+      CI=false npm run build 2>&1
+      echo "=== BUILD COMPLETE, CHECKING FILES ==="
+      ls -la build/
+      cd ..
+      echo "=== CREATING PUBLIC DIRECTORY ==="
+      mkdir -p public
+      echo "=== COPYING BUILD FILES ==="
+      cp -r client/build/* public/
+      echo "=== FINAL CHECK ==="
+      ls -la public/
+      echo "=== BUILD PROCESS COMPLETE ==="
     startCommand: node server/index.js
-    envVars:
+    plan: free
+    env:
       - key: NODE_ENV
         value: production
       - key: PORT

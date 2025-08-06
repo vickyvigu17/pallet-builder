@@ -122,11 +122,53 @@ function App() {
     setImplementationLoading(true);
     
     try {
-      // For now, show an alert since we haven't implemented the backend endpoint yet
-      alert(`🚀 Implementation feature coming soon!\n\nActions to implement:\n${llmInsights.implementableActions.map(a => `• ${a.description}`).join('\n')}`);
+      const response = await axios.post('/api/implement-recommendations', {
+        pallets: pallets,
+        orderLines: originalOrderLines,
+        implementableActions: llmInsights.implementableActions
+      });
+
+      console.log('Implementation Response:', response.data);
+      
+      if (response.data.success) {
+        // Update pallets with optimized versions
+        setPallets(response.data.updatedPallets);
+        
+        // Update implementation log
+        setImplementationLog(response.data.implementationLog);
+        
+        // Update insights if new ones are provided
+        if (response.data.newInsights) {
+          setLlmInsights(response.data.newInsights);
+        }
+        
+        // Update summary with new pallet counts
+        const newPallets = response.data.updatedPallets;
+        const storeSet = {};
+        for (let i = 0; i < newPallets.length; i++) {
+          storeSet[newPallets[i].store] = true;
+        }
+        const uniqueStores = Object.keys(storeSet).length;
+        
+        let totalWeight = 0;
+        for (let i = 0; i < newPallets.length; i++) {
+          totalWeight += newPallets[i].totalWeight;
+        }
+        
+        setSummary({
+          totalPallets: newPallets.length,
+          stores: uniqueStores,
+          totalWeight: totalWeight
+        });
+
+        alert(`🎉 Recommendations implemented successfully!\n\n${response.data.implementationLog.join('\n')}`);
+      } else {
+        alert('Failed to implement recommendations. Please try again.');
+      }
     } catch (error) {
       console.error('Error implementing recommendations:', error);
-      alert('Error implementing recommendations. Please try again.');
+      console.error('Error details:', error.response?.data);
+      alert('Error implementing recommendations. Please check console for details.');
     } finally {
       setImplementationLoading(false);
     }

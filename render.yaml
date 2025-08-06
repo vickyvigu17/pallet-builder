@@ -1,17 +1,13 @@
 services:
   - type: web
-    name: pallet-builder
+    name: pallet-builder-app
     env: node
     plan: free
-    buildCommand: npm install && cd client && npm install && npm run build && cd ..
-    startCommand: npm start
-    healthCheckPath: /api/health
+    buildCommand: npm install && cd client && npm install && npm run build && cd .. && cp -r client/build/* public/
+    startCommand: node server/index.js
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
-      - key: NPM_CONFIG_PRODUCTION
-        value: false
-      - key: NODE_VERSION
-        value: 18
+    healthCheckPath: /api/health

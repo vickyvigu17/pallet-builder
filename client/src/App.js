@@ -21,6 +21,10 @@ function App() {
   const [pallets, setPallets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState(null);
+  const [llmInsights, setLlmInsights] = useState(null);
+  const [originalOrderLines, setOriginalOrderLines] = useState([]);
+  const [implementationLoading, setImplementationLoading] = useState(false);
+  const [implementationLog, setImplementationLog] = useState([]);
 
   const addOrderLine = () => {
     const newId = Math.max(...orderLines.map(ol => ol.id), 0) + 1;
@@ -53,18 +57,78 @@ function App() {
 
   const buildPallets = async () => {
     setLoading(true);
+    
+    // Clean and validate order lines
+    const validOrderLines = orderLines
+      .filter(ol => ol.sku && ol.name && ol.store)
+      .map(ol => ({
+        ...ol,
+        unitsPerCase: ol.unitsPerCase || 1,
+        casesPerLayer: ol.casesPerLayer || 1,
+        quantity: ol.quantity || 1,
+        weight: ol.weight || 1,
+        height: ol.height || 0.3
+      }));
+    
+    // Store original order lines for implementation
+    setOriginalOrderLines(validOrderLines);
+    
+    console.log('Valid order lines:', validOrderLines);
+    
     try {
       const response = await axios.post('/api/build-pallets', {
-        orderLines: orderLines.filter(ol => ol.sku && ol.name && ol.store)
+        orderLines: validOrderLines
       });
       
+      console.log('API Response:', response.data);
+      console.log('LLM Insights:', response.data.llmInsights);
+      console.log('Implementable Actions:', response.data.llmInsights?.implementableActions);
       setPallets(response.data.pallets);
-      setSummary(response.data.summary);
+      setLlmInsights(response.data.llmInsights);
+      setImplementationLog([]); // Clear previous implementation log
+      
+      // Calculate summary from pallets
+      const storeSet = {};
+      for (let i = 0; i < response.data.pallets.length; i++) {
+        storeSet[response.data.pallets[i].store] = true;
+      }
+      const uniqueStores = Object.keys(storeSet).length;
+      
+      let totalWeight = 0;
+      for (let i = 0; i < response.data.pallets.length; i++) {
+        totalWeight += response.data.pallets[i].totalWeight;
+      }
+      
+      setSummary({
+        totalPallets: response.data.pallets.length,
+        stores: uniqueStores,
+        totalWeight: totalWeight
+      });
     } catch (error) {
       console.error('Error building pallets:', error);
-      alert('Error building pallets. Please try again.');
+      console.error('Error details:', error.response?.data);
+      alert('Error building pallets. Please check console for details.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const implementRecommendations = async () => {
+    if (!llmInsights?.implementableActions || llmInsights.implementableActions.length === 0) {
+      alert('No implementable recommendations available.');
+      return;
+    }
+
+    setImplementationLoading(true);
+    
+    try {
+      // For now, show an alert since we haven't implemented the backend endpoint yet
+      alert(`🚀 Implementation feature coming soon!\n\nActions to implement:\n${llmInsights.implementableActions.map(a => `• ${a.description}`).join('\n')}`);
+    } catch (error) {
+      console.error('Error implementing recommendations:', error);
+      alert('Error implementing recommendations. Please try again.');
+    } finally {
+      setImplementationLoading(false);
     }
   };
 
@@ -296,6 +360,119 @@ function App() {
 
           {/* Pallet Results Section */}
           <div className="space-y-6">
+            {/* LLM Insights Section */}
+            {llmInsights && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-warehouse-900 flex items-center">
+                    🤖 AI Optimization Insights
+                  </h3>
+                  {((llmInsights.implementableActions && llmInsights.implementableActions.length > 0) || true) && (
+                    <div className="flex flex-col space-y-2">
+                      {/* Debug Info */}
+                      <div className="text-xs text-gray-500">
+                        Debug: {llmInsights.implementableActions ? `${llmInsights.implementableActions.length} actions available` : 'No implementableActions found'}
+                      </div>
+                      
+                      <button
+                        onClick={implementRecommendations}
+                        disabled={implementationLoading || (!llmInsights.implementableActions || llmInsights.implementableActions.length === 0)}
+                        className="btn-primary flex items-center space-x-2 disabled:opacity-50"
+                      >
+                        {implementationLoading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            <span>Implementing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>🚀 Implement Recommendations</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Implementation Log */}
+                {implementationLog && implementationLog.length > 0 && (
+                  <div className="card bg-green-50 border-green-200">
+                    <h4 className="font-semibold text-green-800 mb-2">🎯 Implementation Results</h4>
+                    <div className="space-y-1">
+                      {implementationLog.map((log, idx) => (
+                        <div key={idx} className="text-green-700 text-sm">• {log}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Cost Savings */}
+                {llmInsights.costSavings && (
+                  <div className="card bg-green-50 border-green-200">
+                    <h4 className="font-semibold text-green-800 mb-2">💰 Cost Analysis</h4>
+                    <p className="text-green-700">{llmInsights.costSavings}</p>
+                  </div>
+                )}
+
+                {/* Safety Warnings */}
+                {llmInsights.safetyWarnings && llmInsights.safetyWarnings.length > 0 && (
+                  <div className="card bg-red-50 border-red-200">
+                    <h4 className="font-semibold text-red-800 mb-2">⚠️ Safety Warnings</h4>
+                    <div className="space-y-1">
+                      {llmInsights.safetyWarnings.map((warning, idx) => (
+                        <div key={idx} className="text-red-700 text-sm">• {warning}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Loose Item Strategy */}
+                {llmInsights.looseItemStrategy && (
+                  <div className="card bg-blue-50 border-blue-200">
+                    <h4 className="font-semibold text-blue-800 mb-2">📦 Loose Item Management</h4>
+                    <p className="text-blue-700 text-sm">{llmInsights.looseItemStrategy}</p>
+                  </div>
+                )}
+
+                {/* Recommendations */}
+                {llmInsights.recommendations && llmInsights.recommendations.length > 0 && (
+                  <div className="card bg-yellow-50 border-yellow-200">
+                    <h4 className="font-semibold text-yellow-800 mb-2">💡 AI Recommendations</h4>
+                    <div className="space-y-1">
+                      {llmInsights.recommendations.map((rec, idx) => (
+                        <div key={idx} className="text-yellow-700 text-sm">• {rec}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Detailed Analysis */}
+                {llmInsights.analysis && (
+                  <div className="card">
+                    <h4 className="font-semibold text-warehouse-900 mb-2">📊 Detailed Analysis</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div className="text-center">
+                        <div className="text-xl font-bold text-primary-600">{llmInsights.analysis.totalPallets}</div>
+                        <div className="text-warehouse-600">Total Pallets</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xl font-bold text-primary-600">{llmInsights.analysis.averageUtilization?.toFixed(1)}%</div>
+                        <div className="text-warehouse-600">Avg Utilization</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xl font-bold text-primary-600">{llmInsights.analysis.looseItems?.length || 0}</div>
+                        <div className="text-warehouse-600">Loose Items</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xl font-bold text-primary-600">{llmInsights.analysis.fragileItems?.length || 0}</div>
+                        <div className="text-warehouse-600">Fragile Items</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {summary && (
               <div className="card">
                 <h3 className="text-lg font-semibold text-warehouse-900 mb-3">Summary</h3>

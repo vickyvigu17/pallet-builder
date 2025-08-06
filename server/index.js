@@ -46,14 +46,301 @@ Return a list of pallets with:
 - Special Instructions
 `;
 
-// Pallet building algorithm - ES5 compatible
+// LLM Service for Intelligent Pallet Optimization
+class LLMPalletOptimizer {
+  constructor() {
+    this.systemPrompt = `
+You are an expert pallet optimization AI for warehouse distribution centers.
+
+Your role is to:
+1. INTELLIGENT OPTIMIZATION: Analyze pallet configurations and suggest improvements
+2. LOOSE ITEM MANAGEMENT: Optimize combining of partial cases/loose items
+3. SAFETY ANALYSIS: Predict and prevent damage risks
+
+Rules:
+- Max weight: 1000kg per pallet
+- Max height: 7 layers  
+- Fragile items MUST go on top
+- Frozen items MUST be separate pallets
+- Heavy items go on bottom
+
+Return JSON with:
+{
+  "optimizedPallets": [...], 
+  "looseItemStrategy": "...",
+  "safetyWarnings": [...],
+  "recommendations": [...],
+  "costSavings": "..."
+}
+`;
+  }
+
+  async optimizePallets(pallets, orderLines) {
+    try {
+      // Analyze current configuration
+      const analysis = this.analyzePalletConfiguration(pallets, orderLines);
+      
+      // Generate LLM prompt
+      const prompt = this.buildOptimizationPrompt(pallets, orderLines, analysis);
+      
+      // For now, return mock LLM response (we'll integrate real LLM API later)
+      const mockResponse = this.mockLLMResponse(pallets, orderLines, analysis);
+      console.log(`🤖 LLM Analysis complete - ${mockResponse.implementableActions.length} implementable actions created`);
+      console.log('Implementable Actions:', mockResponse.implementableActions.map(a => a.type));
+      return mockResponse;
+      
+    } catch (error) {
+      console.error('LLM optimization error:', error);
+      return {
+        optimizedPallets: pallets,
+        looseItemStrategy: "Standard case rounding applied",
+        safetyWarnings: [],
+        recommendations: ["LLM optimization temporarily unavailable"],
+        costSavings: "Unable to calculate",
+        implementableActions: []
+      };
+    }
+  }
+
+  analyzePalletConfiguration(pallets, orderLines) {
+    const analysis = {
+      totalPallets: pallets.length,
+      totalWeight: pallets.reduce((sum, p) => sum + p.totalWeight, 0),
+      averageUtilization: 0,
+      fragileItems: [],
+      frozenItems: [],
+      looseItems: [],
+      overweightRisks: [],
+      topHeavyRisks: []
+    };
+
+    // Analyze each pallet
+    pallets.forEach((pallet, index) => {
+      const utilization = (pallet.totalWeight / 1000) * 100;
+      analysis.averageUtilization += utilization;
+
+      if (utilization > 95) {
+        analysis.overweightRisks.push(`Pallet ${index + 1}: ${utilization.toFixed(1)}% capacity`);
+      }
+
+      // Check for safety issues
+      pallet.items.forEach((item, itemIndex) => {
+        if (item.fragile || item.category === 'bottles') {
+          analysis.fragileItems.push({palletIndex: index, item: item.name});
+        }
+        if (item.category === 'frozen') {
+          analysis.frozenItems.push({palletIndex: index, item: item.name});
+        }
+
+        // Check if heavy items are on top (safety risk)
+        if (item.weight > 20 && itemIndex > 0) {
+          analysis.topHeavyRisks.push(`Pallet ${index + 1}: Heavy ${item.name} may be stacked incorrectly`);
+        }
+      });
+    });
+
+    // Find loose items (partial cases)
+    orderLines.forEach(item => {
+      const unitsPerCase = item.unitsPerCase || 12;
+      const remainder = item.quantity % unitsPerCase;
+      if (remainder > 0) {
+        analysis.looseItems.push({
+          item: item.name,
+          looseUnits: remainder,
+          fullCases: Math.floor(item.quantity / unitsPerCase),
+          store: item.store
+        });
+      }
+    });
+
+    analysis.averageUtilization = analysis.averageUtilization / pallets.length;
+    return analysis;
+  }
+
+  buildOptimizationPrompt(pallets, orderLines, analysis) {
+    return `
+WAREHOUSE PALLET OPTIMIZATION REQUEST
+
+Current Configuration:
+- Total Pallets: ${analysis.totalPallets}
+- Total Weight: ${analysis.totalWeight}kg
+- Average Utilization: ${analysis.averageUtilization.toFixed(1)}%
+
+Loose Items Detected:
+${analysis.looseItems.map(item => 
+  `- ${item.item}: ${item.looseUnits} loose units (${item.fullCases} full cases) for ${item.store}`
+).join('\n')}
+
+Safety Concerns:
+${analysis.topHeavyRisks.concat(analysis.overweightRisks).join('\n')}
+
+Fragile Items: ${analysis.fragileItems.length}
+Frozen Items: ${analysis.frozenItems.length}
+
+Please provide:
+1. Optimized pallet arrangement
+2. Strategy for combining loose items
+3. Safety warnings and prevention
+4. Cost-saving recommendations
+`;
+  }
+
+  mockLLMResponse(pallets, orderLines, analysis) {
+    // Simulate intelligent LLM analysis
+    const recommendations = [];
+    const safetyWarnings = [];
+    const implementableActions = [];
+    let looseItemStrategy = "Standard case rounding applied";
+
+    // Intelligent Pallet Optimization - More aggressive for testing
+    if (analysis.averageUtilization < 85) {
+      recommendations.push(`🎯 OPTIMIZATION: Current ${analysis.averageUtilization.toFixed(1)}% utilization. Could consolidate into ${Math.ceil(analysis.totalPallets * 0.85)} pallets for 15% cost savings.`);
+      implementableActions.push({
+        type: 'consolidate',
+        description: 'Consolidate under-utilized pallets',
+        targetPallets: Math.ceil(analysis.totalPallets * 0.85),
+        estimatedSavings: (analysis.totalPallets * 25 * 0.15).toFixed(0)
+      });
+    }
+
+    // ALWAYS add a test action for now (remove this later)
+    if (implementableActions.length === 0) {
+      implementableActions.push({
+        type: 'consolidate',
+        description: 'Test consolidation action (always available)',
+        targetPallets: Math.max(1, analysis.totalPallets - 1),
+        estimatedSavings: '25'
+      });
+      recommendations.push(`🧪 TEST: Added test consolidation action for debugging`);
+    }
+
+    // Smart Loose Item Management  
+    if (analysis.looseItems.length > 0) {
+      const storeGroups = analysis.looseItems.reduce((groups, item) => {
+        if (!groups[item.store]) groups[item.store] = [];
+        groups[item.store].push(item);
+        return groups;
+      }, {});
+
+      const strategies = [];
+      Object.keys(storeGroups).forEach(store => {
+        const items = storeGroups[store];
+        const totalLoose = items.reduce((sum, item) => sum + item.looseUnits, 0);
+        if (totalLoose >= 12) {
+          strategies.push(`${store}: Combine ${items.length} partial cases into 1 mixed case`);
+          implementableActions.push({
+            type: 'combineLoose',
+            store: store,
+            items: items,
+            description: `Combine ${items.length} partial cases for ${store}`,
+            newMixedCase: true
+          });
+        } else {
+          strategies.push(`${store}: Add ${items.length} loose items to existing case`);
+          implementableActions.push({
+            type: 'distributeLoose',
+            store: store,
+            items: items,
+            description: `Distribute ${items.length} loose items for ${store}`,
+            newMixedCase: false
+          });
+        }
+      });
+
+      looseItemStrategy = `📦 SMART LOOSE MANAGEMENT: ${strategies.join('; ')}`;
+      recommendations.push(`💡 Loose item optimization could reduce packaging by ${analysis.looseItems.length} partial cases`);
+    }
+
+    // Predictive Safety Analysis
+    if (analysis.topHeavyRisks.length > 0) {
+      safetyWarnings.push(`⚠️ TOP-HEAVY RISK: ${analysis.topHeavyRisks.length} pallets have heavy items that may crush lower items`);
+      recommendations.push(`🛡️ SAFETY: Rearrange ${analysis.topHeavyRisks.length} pallets with heavy items at bottom`);
+      implementableActions.push({
+        type: 'fixStacking',
+        description: `Reorder items in ${analysis.topHeavyRisks.length} pallets for safety`,
+        affectedPallets: analysis.topHeavyRisks.length
+      });
+    }
+
+    if (analysis.overweightRisks.length > 0) {
+      safetyWarnings.push(`⚠️ OVERWEIGHT RISK: ${analysis.overweightRisks.length} pallets exceed 95% capacity`);
+      implementableActions.push({
+        type: 'redistributeWeight',
+        description: `Redistribute weight in ${analysis.overweightRisks.length} overloaded pallets`,
+        affectedPallets: analysis.overweightRisks.length
+      });
+    }
+
+    // Check for fragile item safety
+    const fragileInMixed = analysis.fragileItems.filter(item => {
+      const pallet = pallets[item.palletIndex];
+      return pallet.items.length > 1;
+    });
+
+    if (fragileInMixed.length > 0) {
+      safetyWarnings.push(`⚠️ FRAGILE RISK: ${fragileInMixed.length} fragile items mixed with other products`);
+      recommendations.push(`🛡️ SAFETY: Consider separate handling for fragile items`);
+      implementableActions.push({
+        type: 'separateFragile',
+        description: `Separate ${fragileInMixed.length} fragile items for safer handling`,
+        fragileItems: fragileInMixed
+      });
+    }
+
+    const costSavings = analysis.averageUtilization < 75 ? 
+      `Potential savings: $${(analysis.totalPallets * 25 * 0.15).toFixed(0)} (15% reduction in pallets × $25/pallet)` :
+      "Current configuration is well-optimized";
+
+    console.log(`🔧 Creating LLM response with ${implementableActions.length} implementable actions`);
+    console.log('Action types:', implementableActions.map(a => a.type));
+
+    return {
+      optimizedPallets: pallets, // For now, return original pallets
+      looseItemStrategy,
+      safetyWarnings,
+      recommendations,
+      costSavings,
+      analysis,
+      implementableActions
+    };
+  }
+}
+
+// Pallet building algorithm - ES5 compatible with LLM integration
 class PalletBuilder {
   constructor() {
     this.MAX_WEIGHT = 1000;
     this.MAX_HEIGHT = 7;
+    this.llmOptimizer = new LLMPalletOptimizer();
   }
 
-  buildPallets(orderLines) {
+  async buildPallets(orderLines) {
+    console.log('🤖 Starting Hybrid Algorithm + LLM approach...');
+    
+    // Step 1: Traditional Algorithm (Core Logic)
+    const traditionalPallets = this.buildTraditionalPallets(orderLines);
+    console.log(`📦 Traditional algorithm created ${traditionalPallets.length} pallets`);
+
+    // Step 2: LLM Analysis & Optimization  
+    const llmOptimization = await this.llmOptimizer.optimizePallets(traditionalPallets, orderLines);
+    console.log('🧠 LLM analysis complete');
+
+    // Step 3: Return Hybrid Results
+    return {
+      pallets: llmOptimization.optimizedPallets,
+      llmInsights: {
+        looseItemStrategy: llmOptimization.looseItemStrategy,
+        safetyWarnings: llmOptimization.safetyWarnings,
+        recommendations: llmOptimization.recommendations,
+        costSavings: llmOptimization.costSavings,
+        analysis: llmOptimization.analysis,
+        implementableActions: llmOptimization.implementableActions
+      }
+    };
+  }
+
+  buildTraditionalPallets(orderLines) {
+    // Original algorithm logic (renamed from buildPallets)
     const pallets = [];
     const storeGroups = this.groupByStore(orderLines);
     const stores = Object.keys(storeGroups);
@@ -219,7 +506,7 @@ app.get('/api/health', function(req, res) {
   });
 });
 
-app.post('/api/build-pallets', function(req, res) {
+app.post('/api/build-pallets', async function(req, res) {
   try {
     const orderLines = req.body.orderLines;
     
@@ -228,28 +515,9 @@ app.post('/api/build-pallets', function(req, res) {
     }
 
     const palletBuilder = new PalletBuilder();
-    const pallets = palletBuilder.buildPallets(orderLines);
+    const result = await palletBuilder.buildPallets(orderLines);
 
-    const storeSet = {};
-    for (let i = 0; i < pallets.length; i++) {
-      storeSet[pallets[i].store] = true;
-    }
-    const uniqueStores = Object.keys(storeSet).length;
-
-    let totalWeight = 0;
-    for (let i = 0; i < pallets.length; i++) {
-      totalWeight += pallets[i].totalWeight;
-    }
-
-    res.json({
-      success: true,
-      pallets: pallets,
-      summary: {
-        totalPallets: pallets.length,
-        stores: uniqueStores,
-        totalWeight: totalWeight
-      }
-    });
+    res.json(result);
   } catch (error) {
     console.error('Error building pallets:', error);
     res.status(500).json({ error: 'Internal server error' });

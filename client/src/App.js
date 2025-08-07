@@ -75,8 +75,11 @@ function App() {
     
     console.log('Valid order lines:', validOrderLines);
     
+    // Use different API URL for development vs production
+    const apiBaseUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:10000' : '';
+    
     try {
-      const response = await axios.post('/api/build-pallets', {
+      const response = await axios.post(`${apiBaseUrl}/api/build-pallets`, {
         orderLines: validOrderLines
       });
       
@@ -121,8 +124,11 @@ function App() {
 
     setImplementationLoading(true);
     
+    // Use different API URL for development vs production
+    const apiBaseUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:10000' : '';
+    
     try {
-      const response = await axios.post('/api/implement-recommendations', {
+      const response = await axios.post(`${apiBaseUrl}/api/implement-recommendations`, {
         pallets: pallets,
         orderLines: originalOrderLines,
         implementableActions: llmInsights.implementableActions

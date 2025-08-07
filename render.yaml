@@ -3,16 +3,18 @@ services:
     name: pallet-builder-app
     env: node
     buildCommand: |
-      echo "=== STARTING BUILD PROCESS ==="
-      rm -rf node_modules client/node_modules public/*
+      echo "=== FORCE CLEAN BUILD PROCESS ==="
+      rm -rf node_modules client/node_modules client/build public/* ~/.npm
       echo "=== INSTALLING SERVER DEPENDENCIES ==="
-      npm install
+      npm install --no-cache
       echo "=== INSTALLING CLIENT DEPENDENCIES ==="
-      cd client && npm install
-      echo "=== BUILDING REACT APP ==="
-      CI=false npm run build 2>&1
+      cd client && npm install --no-cache
+      echo "=== FORCE BUILDING REACT APP (NO CACHE) ==="
+      npm run build --reset-cache 2>&1
       echo "=== BUILD COMPLETE, CHECKING FILES ==="
       ls -la build/
+      echo "=== CHECKING JS FILES ==="
+      ls -la build/static/js/
       cd ..
       echo "=== CREATING PUBLIC DIRECTORY ==="
       mkdir -p public
@@ -20,6 +22,8 @@ services:
       cp -r client/build/* public/
       echo "=== FINAL CHECK ==="
       ls -la public/
+      echo "=== CHECKING PUBLIC JS FILES ==="
+      ls -la public/static/js/
       echo "=== BUILD PROCESS COMPLETE ==="
     startCommand: node server/index.js
     plan: free
@@ -28,4 +32,6 @@ services:
         value: production
       - key: PORT
         value: 10000
+      - key: GENERATE_SOURCEMAP
+        value: false
     healthCheckPath: /api/health
